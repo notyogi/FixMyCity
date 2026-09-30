@@ -1,0 +1,2 @@
+# State Providers
+This directory is reserved for Riverpod state providers (e.g. auth_provider, report_provider, location_provider).

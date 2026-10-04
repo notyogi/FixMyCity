@@ -3,7 +3,7 @@ import { Router, Request, Response } from 'express';
 const router = Router();
 
 /**
- * @route   GET /api/health
+ * @route   GET /api/v1/health
  * @desc    Health check endpoint
  * @access  Public
  */

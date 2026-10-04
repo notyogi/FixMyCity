@@ -16,7 +16,12 @@ app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API Route Mounts
+// API Route Mounts (v1)
+app.use('/api/v1/health', healthRoutes);
+app.use('/api/v1/reports', reportsRoutes);
+app.use('/api/v1/auth', authRoutes);
+
+// Backward-compatible unversioned fallbacks
 app.use('/api/health', healthRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/auth', authRoutes);

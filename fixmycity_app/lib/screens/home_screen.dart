@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
@@ -109,7 +110,44 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Test Backend Connection Button
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () async {
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Checking backend connection...'),
+                      duration: Duration(milliseconds: 600),
+                    ),
+                  );
+                  final isHealthy = await ApiService().checkBackendHealth();
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isHealthy ? 'Backend connected ✅' : 'Backend unreachable ❌',
+                      ),
+                      backgroundColor: isHealthy ? Colors.teal.shade700 : Colors.red.shade700,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.cloud_sync_outlined),
+                label: const Text('Test Backend Connection'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // Quick Stats Row
             Row(

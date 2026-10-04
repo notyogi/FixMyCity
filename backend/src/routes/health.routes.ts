@@ -8,6 +8,7 @@ const router = Router();
  * @access  Public
  */
 router.get('/', (_req: Request, res: Response) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   res.status(200).json({ status: 'ok' });
 });
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
@@ -29,10 +30,15 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Log Out',
-            onPressed: () {
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
+            onPressed: () async {
+              try {
+                await AuthService().signOut();
+              } catch (_) {}
+              if (context.mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                );
+              }
             },
           ),
         ],

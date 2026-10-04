@@ -1,9 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+
+/// Global key to enable top-level navigation from auth state listeners
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -40,12 +46,73 @@ Future<void> main() async {
   );
 }
 
-class FixMyCityApp extends StatelessWidget {
+class FixMyCityApp extends StatefulWidget {
   const FixMyCityApp({super.key});
+
+  @override
+  State<FixMyCityApp> createState() => _FixMyCityAppState();
+}
+
+class _FixMyCityAppState extends State<FixMyCityApp> {
+  StreamSubscription<AuthState>? _authSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAuthStateListener();
+  }
+
+  void _setupAuthStateListener() {
+    try {
+      _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen(
+        (data) {
+          final AuthChangeEvent event = data.event;
+          final Session? session = data.session;
+
+          debugPrint('Auth event received: $event (session: ${session != null})');
+
+          if (event == AuthChangeEvent.signedIn && session != null) {
+            // Automatically route from login screen to home screen on successful OAuth redirect
+            navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const HomeScreen()),
+              (route) => false,
+            );
+          } else if (event == AuthChangeEvent.signedOut) {
+            // Return to login screen on sign out
+            navigatorKey.currentState?.pushAndRemoveUntil(
+              MaterialPageRoute(builder: (_) => const LoginScreen()),
+              (route) => false,
+            );
+          }
+        },
+        onError: (error) {
+          debugPrint('Supabase auth state stream error: $error');
+        },
+      );
+    } catch (e) {
+      debugPrint('Supabase auth listener registration bypassed (client may not be initialized): $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _authSubscription?.cancel();
+    super.dispose();
+  }
+
+  Widget _resolveInitialScreen() {
+    try {
+      if (Supabase.instance.client.auth.currentSession != null) {
+        return const HomeScreen();
+      }
+    } catch (_) {}
+    return const LoginScreen();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'FixMyCity',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -71,7 +138,7 @@ class FixMyCityApp extends StatelessWidget {
         ),
       ),
       themeMode: ThemeMode.system,
-      home: const LoginScreen(),
+      home: _resolveInitialScreen(),
     );
   }
 }

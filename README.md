@@ -12,7 +12,7 @@ The project is structured as a monorepo containing:
 
 ---
 
-## Week 1 — Project Setup & Architecture (Implementation Log)
+## Week 1 — Project Setup & Architecture
 
 ### **Sep 30, 2026 — Repository & Workflow Setup**
 - Initialized Git repository.
@@ -34,6 +34,10 @@ The project is structured as a monorepo containing:
 - **Authentication & Deep Linking**: Implemented Supabase Auth (Email & Google OAuth) with native deep linking (`fixmycity://login-callback`) on Android and iOS.
 - **Database Connection Pooling**: Configured Prisma with pooled (`DATABASE_URL`) and direct (`DIRECT_URL`) Supabase connections; verified live database & PostGIS connectivity.
 - **End-to-End Connectivity**: Added Express health-check endpoint (`/api/v1/health`) and wired up a "Test Backend Connection" button on the mobile Home Screen.
+
+---
+
+## Week 2 — Database Schema & Core Backend APIs
 
 ### **Oct 05, 2026 — Core Database Schema & Migration (Users & Reports)**
 - **Prisma Schema Modeling**: Designed core models in `schema.prisma` for `User` (mapped to Supabase Auth UUIDs) and `Report` (with geospatial coordinates, Cloudinary media URLs, and cluster linkage).

@@ -10,3 +10,60 @@ datasource db {
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
 }
+
+enum IssueType {
+  POTHOLE
+  STREETLIGHT
+  GARBAGE
+  DRAINAGE
+  TRAFFIC_SIGNAL
+  SIDEWALK
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ReportStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SCHEDULED
+  FIXED
+  REJECTED
+}
+
+model User {
+  id               String   @id @db.Uuid
+  name             String?
+  email            String   @unique
+  reputation_score Int      @default(0)
+  created_at       DateTime @default(now())
+  reports          Report[]
+
+  @@map("users")
+}
+
+model Report {
+  id         String       @id @default(uuid()) @db.Uuid
+  user_id    String       @db.Uuid
+  image_url  String
+  image_hash String?
+  lat        Float
+  lng        Float
+  issue_type IssueType
+  severity   Severity
+  status     ReportStatus @default(SUBMITTED)
+  cluster_id String?      @db.Uuid
+  created_at DateTime     @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([status])
+  @@index([cluster_id])
+  @@index([created_at])
+  @@map("reports")
+}

@@ -37,33 +37,67 @@ enum ReportStatus {
 }
 
 model User {
-  id               String   @id @db.Uuid
+  id               String               @id @db.Uuid
   name             String?
-  email            String   @unique
-  reputation_score Int      @default(0)
-  created_at       DateTime @default(now())
+  email            String               @unique
+  reputation_score Int                  @default(0)
+  created_at       DateTime             @default(now())
   reports          Report[]
+  confirmations    ReportConfirmation[]
 
   @@map("users")
 }
 
 model Report {
-  id         String       @id @default(uuid()) @db.Uuid
-  user_id    String       @db.Uuid
-  image_url  String
-  image_hash String?
-  lat        Float
-  lng        Float
-  issue_type IssueType
-  severity   Severity
-  status     ReportStatus @default(SUBMITTED)
-  cluster_id String?      @db.Uuid
-  created_at DateTime     @default(now())
+  id            String               @id @default(uuid()) @db.Uuid
+  user_id       String               @db.Uuid
+  image_url     String
+  image_hash    String?
+  lat           Float
+  lng           Float
+  issue_type    IssueType
+  severity      Severity
+  status        ReportStatus         @default(SUBMITTED)
+  cluster_id    String?              @db.Uuid
+  created_at    DateTime             @default(now())
 
-  user User @relation(fields: [user_id], references: [id])
+  user          User                 @relation(fields: [user_id], references: [id])
+  cluster       ReportCluster?       @relation(fields: [cluster_id], references: [id])
+  confirmations ReportConfirmation[]
 
   @@index([status])
   @@index([cluster_id])
   @@index([created_at])
   @@map("reports")
+}
+
+model ReportCluster {
+  id                 String               @id @default(uuid()) @db.Uuid
+  centroid_lat       Float
+  centroid_lng       Float
+  confirmation_count Int                  @default(1)
+  priority_score     Float                @default(0)
+  created_at         DateTime             @default(now())
+  updated_at         DateTime             @updatedAt
+
+  reports            Report[]
+  confirmations      ReportConfirmation[]
+
+  @@index([priority_score])
+  @@map("report_clusters")
+}
+
+model ReportConfirmation {
+  id                   String        @id @default(uuid()) @db.Uuid
+  report_id            String        @db.Uuid
+  cluster_id           String        @db.Uuid
+  confirmed_by_user_id String        @db.Uuid
+  created_at           DateTime      @default(now())
+
+  report               Report        @relation(fields: [report_id], references: [id])
+  cluster              ReportCluster @relation(fields: [cluster_id], references: [id])
+  user                 User          @relation(fields: [confirmed_by_user_id], references: [id])
+
+  @@unique([report_id, confirmed_by_user_id])
+  @@map("report_confirmations")
 }

@@ -44,4 +44,9 @@ The project is structured as a monorepo containing:
 - **PostgreSQL Enums & Indexing**: Created custom enums for `IssueType`, `Severity`, and `ReportStatus` (`SUBMITTED` default); added database indexes for `status`, `cluster_id`, and `created_at`.
 - **Database Migration**: Created and applied the initial migration (`init_core_models`) to the remote Supabase PostgreSQL database via `DIRECT_URL`, verifying table creation and relational integrity in the Supabase Schema Visualizer.
 
+### **Oct 06, 2026 — Clustering & Confirmation Models Migration**
+- **Prisma Schema Expansion**: Designed and integrated `ReportCluster` (centroid coordinates, priority scoring, auto-timestamps) and `ReportConfirmation` (junction model with composite unique constraint on `[report_id, confirmed_by_user_id]`).
+- **Relational Integrity**: Established cross-table foreign key relations between `User`, `Report`, `ReportCluster`, and `ReportConfirmation`.
+- **Database Migration**: Created and applied migration (`add_clusters_and_confirmations`) to remote Supabase PostgreSQL via `DIRECT_URL`, verifying the complete relational graph in the Supabase Schema Visualizer.
+
 ---

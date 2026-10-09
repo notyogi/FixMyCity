@@ -8,3 +8,7 @@ dist/
 .cursor/
 .devin/
 .agents/
+
+
+// Isko baad me hta dunga
+generateToken.ts

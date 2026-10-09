@@ -49,4 +49,10 @@ The project is structured as a monorepo containing:
 - **Relational Integrity**: Established cross-table foreign key relations between `User`, `Report`, `ReportCluster`, and `ReportConfirmation`.
 - **Database Migration**: Created and applied migration (`add_clusters_and_confirmations`) to remote Supabase PostgreSQL via `DIRECT_URL`, verifying the complete relational graph in the Supabase Schema Visualizer.
 
+### **Oct 09, 2026 — Core Report Management APIs, Validation & Auth Middleware**
+- **Supabase JWT Authentication & RBAC Middleware**: Implemented `requireAuth` to verify Supabase JWT tokens via `@supabase/supabase-js` service role client, extending Express `Request` with authenticated user context; implemented `requireAdmin` for protected administrative operations via `ADMIN_USER_IDS`.
+- **Zod Validation Layer**: Created comprehensive schemas in `report.validation.ts` leveraging native Prisma enums (`IssueType`, `Severity`, `ReportStatus`), geographic coordinate bounds (`lat`, `lng`), and paginated query parameters.
+- **Report Management Controllers & Routing**: Implemented full CRUD endpoints for civic damage reports (`POST /api/v1/reports`, `GET /api/v1/reports`, `GET /api/v1/reports/:id`, `PATCH /api/v1/reports/:id/status`) with foreign key relational integrity, pagination, and cluster associations.
+- **Database Utilities & Verification**: Centralized Prisma and Supabase service client singletons; verified end-to-end functionality across live database persistence and Postman collection testing.
+
 ---

@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import healthRoutes from './routes/health.routes';
 import reportsRoutes from './routes/reports.routes';
 import authRoutes from './routes/auth.routes';
+import { requireAuth } from './middleware/auth.middleware';
 
 const app: Application = express();
 
@@ -21,10 +22,24 @@ app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/auth', authRoutes);
 
+// Protected test endpoint to verify Supabase JWT authentication
+app.get('/api/v1/protected-test', requireAuth, (req: Request, res: Response) => {
+  res.status(200).json({
+    message: 'Protected route accessed successfully',
+    user: req.user,
+  });
+});
+
 // Backward-compatible unversioned fallbacks
 app.use('/api/health', healthRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/auth', authRoutes);
+app.get('/api/protected-test', requireAuth, (req: Request, res: Response) => {
+  res.status(200).json({
+    message: 'Protected route accessed successfully',
+    user: req.user,
+  });
+});
 
 // Catch-all 404 handler
 app.use((_req: Request, res: Response) => {

@@ -10,5 +10,6 @@ dist/
 .agents/
 
 
-// Isko baad me hta dunga
+# Temporary utility script
+src/scripts/generateToken.ts
 generateToken.ts

@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { supabase } from '../utils/supabase';
+import { supabaseAdmin } from '../lib/supabaseAdmin';
 
 /**
  * Middleware that validates the Supabase JWT access token in the Authorization header.
@@ -15,7 +15,7 @@ export const requireAuth = async (
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       res.status(401).json({
-        error: 'Unauthorized: Missing or invalid Authorization header',
+        error: 'Missing or malformed authorization header',
       });
       return;
     }
@@ -24,27 +24,27 @@ export const requireAuth = async (
 
     if (!token) {
       res.status(401).json({
-        error: 'Unauthorized: Bearer token is empty',
+        error: 'Missing or malformed authorization header',
       });
       return;
     }
 
     const {
-      data: { user },
+      data,
       error,
-    } = await supabase.auth.getUser(token);
+    } = await supabaseAdmin.auth.getUser(token);
 
-    if (error || !user) {
+    if (error || !data?.user) {
       res.status(401).json({
-        error: 'Unauthorized: Invalid or expired token',
+        error: 'Invalid or expired token',
       });
       return;
     }
 
     req.user = {
-      id: user.id,
-      email: user.email,
-      name: (user.user_metadata?.full_name || user.user_metadata?.name) as string | undefined,
+      id: data.user.id,
+      email: data.user.email,
+      name: (data.user.user_metadata?.full_name || data.user.user_metadata?.name) as string | undefined,
     };
 
     next();
@@ -65,7 +65,7 @@ export const requireAdmin = (
 ): void => {
   if (!req.user || !req.user.id) {
     res.status(401).json({
-      error: 'Unauthorized: User authentication required before admin verification',
+      error: 'Unauthorized: Authentication required before admin verification',
     });
     return;
   }
@@ -77,7 +77,7 @@ export const requireAdmin = (
 
   if (!adminUserIds.includes(req.user.id)) {
     res.status(403).json({
-      error: 'Forbidden: Admin access required',
+      error: 'Admin access required',
     });
     return;
   }

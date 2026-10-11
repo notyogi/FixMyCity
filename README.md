@@ -55,4 +55,18 @@ The project is structured as a monorepo containing:
 - **Report Management Controllers & Routing**: Implemented full CRUD endpoints for civic damage reports (`POST /api/v1/reports`, `GET /api/v1/reports`, `GET /api/v1/reports/:id`, `PATCH /api/v1/reports/:id/status`) with foreign key relational integrity, pagination, and cluster associations.
 - **Database Utilities & Verification**: Centralized Prisma and Supabase service client singletons; verified end-to-end functionality across live database persistence and Postman collection testing.
 
+### **Oct 10, 2026 — Postman Collection Setup & End-to-End Reports API Testing**
+- **Postman Workspace & Collection Structure**: Configured dedicated `Reports` folder within the `FixMyCity` Postman collection with collection-level variables (`{{server}}` set to `http://localhost:5001/api/v1`).
+- **End-to-End CRUD Verification**:
+  - `POST submit report`: Successfully verified report creation with coordinates, image URLs, and enums, confirming database insertion into Supabase.
+  - `GET get reports`: Verified paginated listing with query filters (`page`, `limit`, `status`, `issue_type`) and reporter details.
+  - `GET Report Detail by ID`: Verified single report lookup with path variables (`:id`) and relational user info.
+  - `PATCH Update Report Status`: Verified admin-only status transitions (`SCHEDULED`) protected by JWT validation and `ADMIN_USER_IDS` authorization.
+
+### **Oct 11, 2026 — Supabase Admin Client Refactor & Protected Route Testing**
+- **Supabase Admin Client Singleton**: Created `src/lib/supabaseAdmin.ts` using `createClient` from `@supabase/supabase-js` with `autoRefreshToken: false` and `persistSession: false` for dedicated server-side authentication operations.
+- **Auth Middleware Refactoring**: Updated `requireAuth` and `requireAdmin` in `src/middleware/auth.middleware.ts` to consume `supabaseAdmin` directly and standardized error messages (`Missing or malformed authorization header`, `Invalid or expired token`, `Admin access required`).
+- **Protected Test Endpoint**: Added `GET /api/v1/protected-test` in `src/app.ts` to independently verify JWT token extraction and user payload echoing without modifying the public health check.
+- **Postman Integration**: Added and verified `GET Protected Test` in the Postman collection across unauthorized (401) and authenticated (200) scenarios.
+
 ---

@@ -1,3 +1,83 @@
+// ignore_for_file: constant_identifier_names
+
+/// IssueType mirroring backend Prisma schema enum
+enum IssueType {
+  POTHOLE,
+  STREETLIGHT,
+  GARBAGE,
+  DRAINAGE,
+  TRAFFIC_SIGNAL,
+  SIDEWALK,
+  OTHER;
+
+  String get displayName {
+    switch (this) {
+      case IssueType.POTHOLE:
+        return 'Pothole';
+      case IssueType.STREETLIGHT:
+        return 'Streetlight';
+      case IssueType.GARBAGE:
+        return 'Garbage';
+      case IssueType.DRAINAGE:
+        return 'Drainage';
+      case IssueType.TRAFFIC_SIGNAL:
+        return 'Traffic Signal';
+      case IssueType.SIDEWALK:
+        return 'Sidewalk';
+      case IssueType.OTHER:
+        return 'Other';
+    }
+  }
+
+  static IssueType fromString(String value) {
+    return IssueType.values.firstWhere(
+      (e) => e.name.toUpperCase() == value.toUpperCase(),
+      orElse: () => IssueType.OTHER,
+    );
+  }
+}
+
+/// Severity mirroring backend Prisma schema enum
+enum Severity {
+  LOW,
+  MEDIUM,
+  HIGH,
+  CRITICAL;
+
+  String get displayName {
+    switch (this) {
+      case Severity.LOW:
+        return 'Low';
+      case Severity.MEDIUM:
+        return 'Medium';
+      case Severity.HIGH:
+        return 'High';
+      case Severity.CRITICAL:
+        return 'Critical';
+    }
+  }
+
+  String get description {
+    switch (this) {
+      case Severity.LOW:
+        return 'Minor issue, not urgent';
+      case Severity.MEDIUM:
+        return 'Noticeable problem affecting daily flow';
+      case Severity.HIGH:
+        return 'Substantial disruption or damage';
+      case Severity.CRITICAL:
+        return 'Immediate safety hazard';
+    }
+  }
+
+  static Severity fromString(String value) {
+    return Severity.values.firstWhere(
+      (e) => e.name.toUpperCase() == value.toUpperCase(),
+      orElse: () => Severity.LOW,
+    );
+  }
+}
+
 /// Model representing an infrastructure damage report in FixMyCity.
 class ReportModel {
   final String id;

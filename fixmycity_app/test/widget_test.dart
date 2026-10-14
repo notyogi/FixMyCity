@@ -19,10 +19,12 @@ void main() {
     // Verify LoginScreen is shown
     expect(find.byType(LoginScreen), findsOneWidget);
     expect(find.text('FixMyCity'), findsOneWidget);
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Login'), findsWidgets);
 
-    // Tap 'Sign In' button to navigate to HomeScreen
-    await tester.tap(find.text('Sign In'));
+    // Tap 'Continue as Guest' button to navigate to HomeScreen
+    final guestButton = find.text('Continue as Guest');
+    await tester.ensureVisible(guestButton);
+    await tester.tap(guestButton);
     await tester.pumpAndSettle();
 
     // Verify HomeScreen is now displayed

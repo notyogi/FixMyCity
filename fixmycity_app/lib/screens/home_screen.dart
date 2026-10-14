@@ -288,8 +288,8 @@ class HomeScreen extends StatelessWidget {
             ),
           );
         },
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Report Damage'),
+        icon: const Icon(Icons.add_a_photo_outlined),
+        label: const Text('Report an Issue'),
       ),
     );
   }

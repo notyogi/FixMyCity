@@ -70,3 +70,13 @@ The project is structured as a monorepo containing:
 - **Postman Integration**: Added and verified `GET Protected Test` in the Postman collection across unauthorized (401) and authenticated (200) scenarios.
 
 ---
+
+## Week 3 — Mobile App: Reporting Flow
+
+### **Oct 14, 2026 — Mobile Reporting Flow & State Management**
+- **Prisma Enum Mirroring**: Defined Dart enums for `IssueType` and `Severity` in `report_model.dart` matching the backend schema with human-readable labels and severity hints.
+- **Login & Sign Up Screen**: Built `LoginScreen` with mode toggle, email/password validation, Google OAuth via `AuthService`, and guest entry fallback.
+- **Multi-Step Reporting Flow**: Created a 3-step workflow in `report_submission_screen.dart` combining camera capture/gallery picking (`image_picker`), GPS geotagging (`LocationService`), issue tagging, and summary review.
+- **Riverpod State Management**: Implemented `newReportProvider` (`NewReportNotifier`) to maintain form state across steps and manage report lifecycle.
+
+---

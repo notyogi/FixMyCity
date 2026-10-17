@@ -28,9 +28,9 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>FixMyCity requires photo library access to upload damage photos.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>FixMyCity requires location access to pinpoint damaged infrastructure on the map.</string>
+	<string>FixMyCity needs your location to accurately tag where an infrastructure issue is located.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>FixMyCity requires location access to pinpoint damaged infrastructure on the map.</string>
+	<string>FixMyCity needs your location to accurately tag where an infrastructure issue is located.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

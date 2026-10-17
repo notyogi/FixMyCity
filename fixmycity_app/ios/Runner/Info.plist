@@ -22,11 +22,11 @@
 	<key>CFBundleDisplayName</key>
 	<string>FixMyCity</string>
 	<key>NSCameraUsageDescription</key>
-	<string>FixMyCity requires camera access to photograph infrastructure damage.</string>
+	<string>FixMyCity needs camera access to let you photograph infrastructure issues.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>FixMyCity requires microphone access when recording issue footage.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>FixMyCity requires photo library access to upload damage photos.</string>
+	<string>FixMyCity needs photo library access so you can select an existing photo of an issue.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>FixMyCity needs your location to accurately tag where an infrastructure issue is located.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>

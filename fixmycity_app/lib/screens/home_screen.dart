@@ -4,6 +4,7 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
+import 'camera_test_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -140,6 +141,29 @@ class HomeScreen extends StatelessWidget {
                 icon: const Icon(Icons.cloud_sync_outlined),
                 label: const Text('Test Backend Connection'),
                 style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // TODO: Temporary button to test CameraCaptureWidget in isolation. Remove once real submission flow integrates the widget properly.
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CameraTestScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.camera_alt_outlined),
+                label: const Text('Test Camera Capture Widget'),
+                style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),

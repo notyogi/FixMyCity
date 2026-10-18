@@ -79,4 +79,22 @@ The project is structured as a monorepo containing:
 - **Multi-Step Reporting Flow**: Created a 3-step workflow in `report_submission_screen.dart` combining camera capture/gallery picking (`image_picker`), GPS geotagging (`LocationService`), issue tagging, and summary review.
 - **Riverpod State Management**: Implemented `newReportProvider` (`NewReportNotifier`) to maintain form state across steps and manage report lifecycle.
 
+### **Oct 17, 2026 — Location Services, Camera Integration & UI Capture Widgets**
+- **Enhanced Location Service & Exceptions**: Refactored `LocationService` with dedicated exception classes (`LocationPermissionException`, `LocationFetchException`), OS-level and app-level settings navigation helpers (`openLocationSettings()`, `openAppSettings()`), and fallback to `getLastKnownPosition()`.
+- **High-Accuracy GPS Geotagging**: Configured `Geolocator` with high-accuracy position acquisition and explicit 10-second timeout handling for reliable civic issue coordinates.
+- **iOS Permission Descriptions**: Updated `Info.plist` with clear, user-facing privacy descriptions for `NSLocationWhenInUseUsageDescription` and `NSLocationAlwaysAndWhenInUseUsageDescription`.
+- **Camera Service Layer**: Built `CameraService` wrapping `image_picker` for camera captures and gallery selection with automatic resolution optimization and quality compression (`imageQuality: 85`, `maxWidth: 1920`, `maxHeight: 1080`).
+- **Camera Capture & Photo Preview Widgets**: Implemented reusable UI widgets (`CameraCaptureWidget`, `PhotoPreviewWidget`) providing image previews, retake/replace options, camera permission handling (`NSCameraUsageDescription`), and full-screen preview overlays.
+- **Camera Test Screen**: Added `CameraTestScreen` accessible directly from the home dashboard for standalone verification of camera/gallery capture flows and file metadata.
+
+### **Oct 18, 2026 — Cloudinary Asset Pipeline, Offline Queueing & Auto-Sync Engine**
+- **Cloudinary Upload Service**: Enhanced `CloudinaryService` with unsigned direct uploads, upload progress tracking streams (`uploadImageWithProgress`), credential validation, and custom `ImageUploadException`.
+- **Interactive Cloudinary Test Screen**: Added `CloudinaryTestScreen` featuring live upload progress bars, status indicators, hosted image previews, and direct URL copy actions.
+- **Offline Storage with SQLite (`sqflite`)**: Implemented `SQLiteHelper` managing a persistent `pending_reports` table with schema versioning and defensive migration handling (`onUpgrade`) for offline queuing.
+- **Sandbox Photo Persistence**: Implemented permanent storage copying in `NewReportNotifier` (`_persistImageFile`) to save captured photos into persistent application documents storage (`pending_report_photos/`), preventing OS temporary cache purges before synchronization.
+- **Background Auto-Sync Engine (`SyncService`)**: Built singleton `SyncService` paired with `ConnectivityService` (`connectivity_plus`) to detect network transitions and automatically drain queued reports sequentially upon online reconnection.
+- **Offline Queue Management UI**: Developed `PendingReportsScreen` featuring report cards with status badges (`pending`, `syncing`, `failed`), retry counters, individual retry triggers, queue batch syncing, and deletion controls.
+- **End-to-End Additional Notes Support**: Added `notes` support across the entire stack — Supabase PostgreSQL database (`ALTER TABLE reports ADD COLUMN notes TEXT`), Prisma schema & client, Zod validation schema, Express `createReport` controller, and Flutter serialization in `ApiService`, `NewReportNotifier`, and `SQLiteHelper`.
+- **Comprehensive Test Suite**: Implemented extensive unit tests across `cloudinary_service_test.dart`, `report_submit_flow_test.dart`, and `offline_queue_test.dart` (22 total tests passing) verifying online submissions, offline queue persistence, failure retries, and network recovery flows.
+
 ---

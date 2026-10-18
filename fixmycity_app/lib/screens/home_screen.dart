@@ -5,6 +5,7 @@ import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
 import 'camera_test_screen.dart';
+import 'cloudinary_test_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -163,6 +164,29 @@ class HomeScreen extends StatelessWidget {
                 },
                 icon: const Icon(Icons.camera_alt_outlined),
                 label: const Text('Test Camera Capture Widget'),
+                style: FilledButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // TODO: Temporary button to test Cloudinary photo upload in isolation. Remove once real upload is wired into the actual report submission flow.
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const CloudinaryTestScreen(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.cloud_upload_outlined),
+                label: const Text('Test Cloudinary Upload'),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(

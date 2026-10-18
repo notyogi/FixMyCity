@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../services/auth_service.dart';
 import 'home_screen.dart';
 
@@ -100,9 +101,13 @@ class _LoginScreenState extends State<LoginScreen> with SingleTickerProviderStat
       }
     } catch (e) {
       if (mounted) {
+        String errorMsg = e.toString();
+        if (e is AuthException) {
+          errorMsg = e.message;
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isSignUp ? 'Sign up failed: $e' : 'Login failed: $e'),
+            content: Text(_isSignUp ? 'Sign up failed: $errorMsg' : 'Login failed: $errorMsg'),
             backgroundColor: Theme.of(context).colorScheme.error,
             behavior: SnackBarBehavior.floating,
           ),

@@ -6,6 +6,9 @@ import 'package:image_picker/image_picker.dart';
 import '../models/report_model.dart';
 import '../providers/new_report_provider.dart';
 import '../services/location_service.dart';
+import '../services/api_service.dart';
+import '../services/cloudinary_service.dart';
+import 'login_screen.dart';
 
 class ReportSubmissionScreen extends ConsumerStatefulWidget {
   const ReportSubmissionScreen({super.key});
@@ -35,6 +38,8 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
 
   // Step 3: Submission state
   bool _isSubmitting = false;
+  String _submitStage = 'Submitting Report...';
+  String? _submitError;
 
   @override
   void initState() {
@@ -250,38 +255,91 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
   }
 
   Future<void> _handleFinalSubmission() async {
-    setState(() => _isSubmitting = true);
+    setState(() {
+      _isSubmitting = true;
+      _submitStage = 'Uploading photo...';
+      _submitError = null;
+    });
 
     try {
-      // Stub submission call from Riverpod notifier
-      await ref.read(newReportProvider.notifier).submitReport();
+      final result = await ref.read(newReportProvider.notifier).submitReport(
+        onStageChanged: (stage) {
+          if (mounted) {
+            setState(() => _submitStage = stage);
+          }
+        },
+      );
 
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_rounded, color: Colors.white),
-              SizedBox(width: 10),
-              Text(
-                'Report submitted! (stub)',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.teal.shade700,
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 3),
-        ),
-      );
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
 
-      // Reset state and return to Home Screen
-      ref.read(newReportProvider.notifier).reset();
+      if (result == SubmitResult.queuedOffline) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.cloud_off_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Device offline. Report queued locally and will auto-sync when online!',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.amber.shade800,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Report submitted successfully!',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.teal.shade700,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+
+      // Return to Home Screen
       Navigator.of(context).pop();
+    } on NotAuthenticatedException catch (e) {
+      if (!mounted) return;
+      _showSnackBar(e.message, isError: true);
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        (route) => false,
+      );
+    } on ImageUploadException catch (e) {
+      if (mounted) {
+        setState(() => _submitError = e.message);
+        _showSnackBar(e.message, isError: true);
+      }
+    } on ReportSubmissionException catch (e) {
+      if (mounted) {
+        setState(() => _submitError = e.message);
+        _showSnackBar(e.message, isError: true);
+      }
     } catch (e) {
       if (mounted) {
-        _showSnackBar('Submission error: $e', isError: true);
+        const msg = 'Something went wrong, please try again';
+        setState(() => _submitError = msg);
+        _showSnackBar(msg, isError: true);
       }
     } finally {
       if (mounted) {
@@ -801,6 +859,30 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
           ),
           const SizedBox(height: 24),
 
+          if (_submitError != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline_rounded, color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _submitError!,
+                      style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           // Submit Action Button
           FilledButton.icon(
             onPressed: _isSubmitting ? null : _handleFinalSubmission,
@@ -812,7 +894,7 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
                   )
                 : const Icon(Icons.send_rounded),
             label: Text(
-              _isSubmitting ? 'Submitting Report...' : 'Submit Report',
+              _isSubmitting ? _submitStage : 'Submit Report',
               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             style: FilledButton.styleFrom(

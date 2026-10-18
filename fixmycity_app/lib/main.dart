@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'services/connectivity_service.dart';
+import 'services/sync_service.dart';
 
 /// Global key to enable top-level navigation from auth state listeners
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -55,11 +57,27 @@ class FixMyCityApp extends StatefulWidget {
 
 class _FixMyCityAppState extends State<FixMyCityApp> {
   StreamSubscription<AuthState>? _authSubscription;
+  StreamSubscription<bool>? _connectivitySubscription;
 
   @override
   void initState() {
     super.initState();
     _setupAuthStateListener();
+    _setupConnectivityAndSync();
+  }
+
+  void _setupConnectivityAndSync() {
+    // Trigger initial sync on startup in case offline reports were waiting
+    SyncService().syncPendingReports();
+
+    // Auto-sync whenever connectivity is restored
+    _connectivitySubscription =
+        ConnectivityService().onConnectivityChanged.listen((isOnline) {
+      if (isOnline) {
+        debugPrint('FixMyCityApp: Connectivity restored — auto-syncing offline reports...');
+        SyncService().syncPendingReports();
+      }
+    });
   }
 
   void _setupAuthStateListener() {
@@ -97,6 +115,7 @@ class _FixMyCityAppState extends State<FixMyCityApp> {
   @override
   void dispose() {
     _authSubscription?.cancel();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 

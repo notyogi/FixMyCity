@@ -57,6 +57,7 @@ model Report {
   lng           Float
   issue_type    IssueType
   severity      Severity
+  notes         String?
   status        ReportStatus         @default(SUBMITTED)
   cluster_id    String?              @db.Uuid
   created_at    DateTime             @default(now())

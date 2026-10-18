@@ -4,11 +4,53 @@ import '../services/api_service.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
+import '../db/sqlite_helper.dart';
+import '../services/sync_service.dart';
 import 'camera_test_screen.dart';
 import 'cloudinary_test_screen.dart';
+import 'pending_reports_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+  int _pendingCount = 0;
+  final SyncService _syncService = SyncService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _refreshPendingCount();
+    _syncService.isSyncingNotifier.addListener(_refreshPendingCount);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshPendingCount();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _syncService.isSyncingNotifier.removeListener(_refreshPendingCount);
+    super.dispose();
+  }
+
+  Future<void> _refreshPendingCount() async {
+    try {
+      final count = await SQLiteHelper.instance.getPendingReportsCount();
+      if (mounted) {
+        setState(() => _pendingCount = count);
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +72,21 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: _pendingCount > 0,
+              label: Text('$_pendingCount'),
+              backgroundColor: Colors.amber.shade800,
+              child: const Icon(Icons.cloud_queue_rounded),
+            ),
+            tooltip: 'Offline Queue ($_pendingCount pending)',
+            onPressed: () async {
+              await Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const PendingReportsScreen()),
+              );
+              _refreshPendingCount();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'Log Out',
@@ -92,12 +149,13 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.of(context).push(
+                    onPressed: () async {
+                      await Navigator.of(context).push(
                         MaterialPageRoute(
                           builder: (_) => const ReportSubmissionScreen(),
                         ),
                       );
+                      _refreshPendingCount();
                     },
                     icon: const Icon(Icons.add_a_photo_outlined),
                     label: const Text('File a Report'),
@@ -112,6 +170,74 @@ class HomeScreen extends StatelessWidget {
                 ],
               ),
             ),
+
+            // Pending Offline Reports Banner
+            if (_pendingCount > 0) ...[
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const PendingReportsScreen(),
+                    ),
+                  );
+                  _refreshPendingCount();
+                },
+                borderRadius: BorderRadius.circular(16),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.amber.shade300),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.cloud_off_rounded,
+                          color: Colors.amber.shade900,
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '$_pendingCount report${_pendingCount > 1 ? 's' : ''} waiting to sync',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: Colors.amber.shade900,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Saved locally. Tap to view queue or retry.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.amber.shade900.withValues(alpha: 0.8),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: Colors.amber.shade800,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Test Backend Connection Button
@@ -329,12 +455,13 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(context).push(
+        onPressed: () async {
+          await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => const ReportSubmissionScreen(),
             ),
           );
+          _refreshPendingCount();
         },
         icon: const Icon(Icons.add_a_photo_outlined),
         label: const Text('Report an Issue'),

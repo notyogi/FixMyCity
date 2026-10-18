@@ -17,6 +17,7 @@ export const createReportSchema = z.object({
   severity: z.nativeEnum(Severity, {
     message: `severity must be one of: ${Object.values(Severity).join(', ')}`,
   }),
+  notes: z.string().optional().nullable(),
 });
 
 export const updateStatusSchema = z.object({

@@ -52,6 +52,7 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
         lng: validation.data.lng,
         issue_type: validation.data.issue_type,
         severity: validation.data.severity,
+        notes: validation.data.notes || null,
         status: ReportStatus.SUBMITTED,
       },
     });

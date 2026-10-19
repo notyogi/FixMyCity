@@ -6,6 +6,7 @@ import {
   listReportsQuerySchema,
 } from '../validation/report.validation';
 import { ReportStatus } from '@prisma/client';
+import { ImageHashService } from '../services/imageHash.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -44,10 +45,26 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
       },
     });
 
+    // Compute perceptual hash (pHash) server-side for future duplicate detection.
+    // Intentional design choice: Availability over completeness. If remote image fetching
+    // or pHash computation encounters an error or timeout, log the failure but proceed
+    // with creating the Report row with image_hash set to null so that a hashing hiccup
+    // never blocks a citizen from successfully submitting a civic damage report.
+    let imageHash: string | null = null;
+    try {
+      imageHash = await ImageHashService.computePerceptualHash(validation.data.image_url);
+    } catch (hashError) {
+      console.error(
+        `[createReport] Failed to compute image pHash for ${validation.data.image_url}:`,
+        hashError instanceof Error ? hashError.message : hashError
+      );
+    }
+
     const report = await prisma.report.create({
       data: {
         user_id: userId,
         image_url: validation.data.image_url,
+        image_hash: imageHash,
         lat: validation.data.lat,
         lng: validation.data.lng,
         issue_type: validation.data.issue_type,

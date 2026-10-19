@@ -8,7 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test:db": "ts-node-dev --transpile-only src/scripts/testConnection.ts",
-    "token": "ts-node-dev --transpile-only src/scripts/generateToken.ts"
+    "token": "ts-node-dev --transpile-only src/scripts/generateToken.ts",
+    "backfill:hashes": "ts-node-dev --transpile-only src/scripts/backfillImageHashes.ts",
+    "test:hash-similarity": "ts-node-dev --transpile-only src/scripts/testHashSimilarity.ts"
   },
   "keywords": [
     "fixmycity",
@@ -23,10 +25,12 @@
     "@prisma/client": "^6.19.3",
     "@supabase/supabase-js": "^2.117.2",
     "cors": "^2.8.6",
+    "dct": "^0.1.0",
     "dotenv": "^18.0.5",
     "express": "^5.2.1",
     "helmet": "^8.3.0",
     "morgan": "^1.12.1",
+    "sharp": "^0.35.5",
     "zod": "^4.6.5"
   },
   "devDependencies": {

@@ -98,3 +98,14 @@ The project is structured as a monorepo containing:
 - **Comprehensive Test Suite**: Implemented extensive unit tests across `cloudinary_service_test.dart`, `report_submit_flow_test.dart`, and `offline_queue_test.dart` (22 total tests passing) verifying online submissions, offline queue persistence, failure retries, and network recovery flows.
 
 ---
+
+## Week 4 — Duplicate Detection Engine
+
+### **Oct 19, 2026 — Server-Side Perceptual Hashing & Duplicate Detection Utilities**
+- **Perceptual Hash Service (`ImageHashService`)**: Built a 64-bit pHash engine using `sharp` and Discrete Cosine Transform (DCT-II) to generate 16-character hex signatures for uploaded damage photos.
+- **Hamming Distance & Similarity Metrics**: Implemented `computeHammingDistance` with a bitwise popcount table to classify duplicate and near-duplicate reports (match threshold `<= 5` bits).
+- **Report Controller Integration**: Wired automated image hashing into `POST /api/v1/reports`, persisting `image_hash` to PostgreSQL with non-blocking fallback handling.
+- **Backfill Script**: Added `npm run backfill:hashes` to scan and compute missing perceptual hashes for legacy database records.
+- **Similarity CLI Test Suite**: Created `npm run test:hash-similarity` to verify Hamming distance and similarity scoring across synthetic scenes, camera compression variants, and live Cloudinary URLs.
+
+---

@@ -7,6 +7,10 @@ import {
 } from '../validation/report.validation';
 import { ReportStatus } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
+import {
+  ProximityService,
+  ProximityQueryException,
+} from '../services/proximity.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -73,6 +77,40 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
         status: ReportStatus.SUBMITTED,
       },
     });
+
+    // Proximity lookup: Find nearby open reports within 25m (read-only verification, clustering logic to follow)
+    try {
+      const nearbyReports = await ProximityService.findNearbyOpenReports(
+        report.lat,
+        report.lng,
+        25,
+        report.id
+      );
+
+      if (nearbyReports.length > 0) {
+        console.log(
+          `[createReport] Found ${nearbyReports.length} nearby open report(s) within 25m of new report ${report.id}:`,
+          nearbyReports.map((r) => ({
+            id: r.id,
+            issue_type: r.issue_type,
+            status: r.status,
+            distance_meters: `${r.distance_meters.toFixed(2)}m`,
+          }))
+        );
+      } else {
+        console.log(
+          `[createReport] Found 0 nearby open reports within 25m of new report ${report.id}`
+        );
+      }
+    } catch (proximityError) {
+      // Availability over completeness: Never fail report creation on a proximity lookup hiccup
+      console.error(
+        `[createReport] Proximity check failed for report ${report.id}:`,
+        proximityError instanceof ProximityQueryException
+          ? proximityError.message
+          : proximityError
+      );
+    }
 
     res.status(201).json(report);
   } catch (error) {

@@ -10,7 +10,8 @@
     "test:db": "ts-node-dev --transpile-only src/scripts/testConnection.ts",
     "token": "ts-node-dev --transpile-only src/scripts/generateToken.ts",
     "backfill:hashes": "ts-node-dev --transpile-only src/scripts/backfillImageHashes.ts",
-    "test:hash-similarity": "ts-node-dev --transpile-only src/scripts/testHashSimilarity.ts"
+    "test:hash-similarity": "ts-node-dev --transpile-only src/scripts/testHashSimilarity.ts",
+    "test:proximity": "ts-node src/scripts/testProximityQuery.ts"
   },
   "keywords": [
     "fixmycity",

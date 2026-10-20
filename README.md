@@ -108,4 +108,12 @@ The project is structured as a monorepo containing:
 - **Backfill Script**: Added `npm run backfill:hashes` to scan and compute missing perceptual hashes for legacy database records.
 - **Similarity CLI Test Suite**: Created `npm run test:hash-similarity` to verify Hamming distance and similarity scoring across synthetic scenes, camera compression variants, and live Cloudinary URLs.
 
+### **Oct 20, 2026 — Geospatial Proximity Lookup & PostGIS ST_DWithin Engine**
+- **Geospatial Proximity Service (`ProximityService`)**: Implemented `findNearbyOpenReports` using PostGIS `ST_DWithin` and `ST_Distance` with geography casting to find candidate reports within 25m.
+- **Parameterized SQL & Error Handling**: Executed queries via `prisma.$queryRaw` tagged templates with safe UUID self-exclusion and custom `ProximityQueryException` handling.
+- **Open Status Filtering**: Restricted candidates to active reports (`status NOT IN ('FIXED', 'REJECTED')`), ignoring historical resolved or rejected items.
+- **Spatial Index Migration**: Added `@@index([lat, lng])` composite index to the `Report` model and applied migration `20261020143124_add_lat_lng_index`.
+- **Controller Logging**: Integrated non-blocking proximity lookups into `createReport` with diagnostic distance and candidate logs on report creation.
+- **CLI Test Script**: Created `src/scripts/testProximityQuery.ts` and `npm run test:proximity` for quick verification with CLI args and tabular results.
+
 ---

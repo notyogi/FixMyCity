@@ -116,4 +116,12 @@ The project is structured as a monorepo containing:
 - **Controller Logging**: Integrated non-blocking proximity lookups into `createReport` with diagnostic distance and candidate logs on report creation.
 - **CLI Test Script**: Created `src/scripts/testProximityQuery.ts` and `npm run test:proximity` for quick verification with CLI args and tabular results.
 
+### **Oct 21, 2026 — Automated Duplicate Detection & Cluster Assignment Engine**
+- **Hamming Distance Utility (`hammingDistance`)**: Implemented `/src/utils/hamming.ts` computing bitwise XOR and binary difference counts to quantify visual similarity between pHash signatures.
+- **Clustering Decision Service (`ClusteringService`)**: Built `evaluateAndAssignCluster` evaluating 25m PostGIS candidates against pHash thresholds to merge reports into existing clusters or create new ones.
+- **Atomic Database Transactions**: Wrapped multi-table operations in Prisma `$transaction` — managing `ReportCluster` records, updating `Report.cluster_id`, creating `ReportConfirmation` rows, and updating arithmetic centroid coordinates.
+- **Configurable Similarity Threshold**: Added `DEDUP_HAMMING_THRESHOLD` (default: 10 bits) to environment variables for tunable matching precision.
+- **Controller Integration**: Replaced read-only proximity logging in `createReport` with automated clustering assignment, enriching API responses with `clusterResult` metadata.
+- **Standalone Clustering CLI**: Added `src/scripts/testClustering.ts` and `npm run test:clustering` to test report merging, confirmation counting, and cluster state inspections.
+
 ---

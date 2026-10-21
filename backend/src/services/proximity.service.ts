@@ -6,6 +6,7 @@ import prisma from '../utils/prisma';
  */
 export interface NearbyReport {
   id: string;
+  user_id: string;
   image_url: string;
   image_hash: string | null;
   lat: number;
@@ -82,6 +83,7 @@ export class ProximityService {
       const reports = await prisma.$queryRaw<NearbyReport[]>`
         SELECT
           id,
+          user_id,
           image_url,
           image_hash,
           lat,

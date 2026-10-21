@@ -8,9 +8,10 @@ import {
 import { ReportStatus } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
 import {
-  ProximityService,
-  ProximityQueryException,
-} from '../services/proximity.service';
+  ClusteringService,
+  ClusteringException,
+  ClusterAssignmentResult,
+} from '../services/clustering.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -78,41 +79,48 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
       },
     });
 
-    // Proximity lookup: Find nearby open reports within 25m (read-only verification, clustering logic to follow)
-    try {
-      const nearbyReports = await ProximityService.findNearbyOpenReports(
-        report.lat,
-        report.lng,
-        25,
-        report.id
-      );
+    // Duplicate detection and cluster assignment:
+    // Evaluates the newly created report against nearby open reports using PostGIS ST_DWithin
+    // and perceptual hash Hamming distance. Atomically merges into an existing cluster or
+    // provisions a new cluster.
+    // Availability over completeness: If clustering fails, log the error but still return HTTP 201
+    // with the created report so that a citizen's submission is never rejected.
+    let clusterResult: ClusterAssignmentResult | null = null;
+    let clusterErrorNote: string | null = null;
 
-      if (nearbyReports.length > 0) {
-        console.log(
-          `[createReport] Found ${nearbyReports.length} nearby open report(s) within 25m of new report ${report.id}:`,
-          nearbyReports.map((r) => ({
-            id: r.id,
-            issue_type: r.issue_type,
-            status: r.status,
-            distance_meters: `${r.distance_meters.toFixed(2)}m`,
-          }))
-        );
-      } else {
-        console.log(
-          `[createReport] Found 0 nearby open reports within 25m of new report ${report.id}`
-        );
-      }
-    } catch (proximityError) {
-      // Availability over completeness: Never fail report creation on a proximity lookup hiccup
+    try {
+      clusterResult = await ClusteringService.evaluateAndAssignCluster(report);
+    } catch (clusteringError) {
       console.error(
-        `[createReport] Proximity check failed for report ${report.id}:`,
-        proximityError instanceof ProximityQueryException
-          ? proximityError.message
-          : proximityError
+        `[createReport] Clustering evaluation failed for report ${report.id}:`,
+        clusteringError instanceof ClusteringException
+          ? clusteringError.message
+          : clusteringError
       );
+      clusterErrorNote = 'Clustering evaluation could not be completed';
     }
 
-    res.status(201).json(report);
+    res.status(201).json({
+      ...report,
+      cluster_id: clusterResult ? clusterResult.clusterId : report.cluster_id,
+      clusterResult: clusterResult
+        ? {
+            action: clusterResult.action,
+            clusterId: clusterResult.clusterId,
+            confirmationCount: clusterResult.confirmationCount,
+            ...(clusterResult.action === 'merged'
+              ? {
+                  matchedReportId: clusterResult.matchedReportId,
+                  hammingDistance: clusterResult.hammingDistance,
+                  distanceMeters: Number(clusterResult.distanceMeters.toFixed(2)),
+                }
+              : {}),
+          }
+        : {
+            status: 'unassigned',
+            note: clusterErrorNote,
+          },
+    });
   } catch (error) {
     console.error('Error in createReport:', error);
     res.status(500).json({ error: 'Internal server error' });

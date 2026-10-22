@@ -124,4 +124,10 @@ The project is structured as a monorepo containing:
 - **Controller Integration**: Replaced read-only proximity logging in `createReport` with automated clustering assignment, enriching API responses with `clusterResult` metadata.
 - **Standalone Clustering CLI**: Added `src/scripts/testClustering.ts` and `npm run test:clustering` to test report merging, confirmation counting, and cluster state inspections.
 
+### **Oct 22, 2026 — Cluster Confirmation Audit & Threshold Calibration Harness**
+- **Confirmation Count Verification**: Verified `ClusteringService` concurrency handling — confirming atomic `{ increment: 1 }` on merge, count of 2 on paired creation, and 1 on standalone creation inside Prisma transactions.
+- **Buffer-Based pHash Support**: Extended `ImageHashService.computePerceptualHash` to accept local Node.js `Buffer` inputs alongside remote URLs for direct offline hashing.
+- **Threshold Calibration Tooling**: Created `/backend/test-data` scaffold and `npm run calibrate:threshold` (`src/scripts/calibrateThreshold.ts`) to benchmark real image pairs, compute Hamming distance statistics, and recommend optimal `DEDUP_HAMMING_THRESHOLD` values.
+- **Offline Results Logging**: Auto-saved full calibration metrics, separation gaps, and overlap warnings to `test-data/calibration-results.txt` (git-ignored).
+
 ---

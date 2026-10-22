@@ -167,15 +167,25 @@ export async function computePerceptualHashFromBuffer(imageBuffer: Buffer): Prom
  */
 export class ImageHashService {
   /**
-   * Fetches image from [imageUrl] with a default 10-second timeout and returns its 16-char hex pHash.
-   * Throws [ImageHashException] on network errors, timeouts, invalid URLs, or corrupted image data.
+   * Computes a 16-char hex pHash from either a remote image URL or a local image Buffer.
+   * - If a Buffer is provided, decodes and hashes directly without network requests.
+   * - If a URL string is provided, fetches the image with a default 10-second timeout.
+   * Throws [ImageHashException] on network errors, timeouts, invalid URLs/inputs, or corrupted image data.
    */
   static async computePerceptualHash(
-    imageUrl: string,
+    imageInput: string | Buffer,
     timeoutMs: number = 10000
   ): Promise<string> {
+    if (Buffer.isBuffer(imageInput)) {
+      if (imageInput.length === 0) {
+        throw new ImageHashException('Empty image buffer provided');
+      }
+      return await computePerceptualHashFromBuffer(imageInput);
+    }
+
+    const imageUrl = imageInput;
     if (!imageUrl || typeof imageUrl !== 'string') {
-      throw new ImageHashException('Invalid image URL: URL must be a non-empty string');
+      throw new ImageHashException('Invalid image input: input must be a non-empty URL string or Buffer');
     }
 
     let parsedUrl: URL;

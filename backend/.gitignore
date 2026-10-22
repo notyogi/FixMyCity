@@ -13,3 +13,16 @@ dist/
 # Temporary utility script
 src/scripts/generateToken.ts
 generateToken.ts
+
+# Test image calibration data
+test-data/*
+!test-data/README.md
+!test-data/similar-pairs/
+!test-data/similar-pairs/.gitkeep
+!test-data/dissimilar-pairs/
+!test-data/dissimilar-pairs/.gitkeep
+test-data/similar-pairs/*
+!test-data/similar-pairs/.gitkeep
+test-data/dissimilar-pairs/*
+!test-data/dissimilar-pairs/.gitkeep
+test-data/calibration-results.txt

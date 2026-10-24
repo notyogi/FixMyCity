@@ -445,14 +445,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   Expanded(
                     child: _buildActionTile(
                       context,
-                      title: 'New Report',
-                      subtitle: 'Snap photo & pinpoint location',
-                      icon: Icons.report_problem_outlined,
-                      color: theme.colorScheme.primary,
+                      title: 'Community Reports',
+                      subtitle: "Other citizens' reports",
+                      icon: Icons.groups_rounded,
+                      color: Colors.teal,
                       onTap: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => const ReportSubmissionScreen(),
+                            builder: (_) => MyReportsScreen(
+                              onlyMyReports: false,
+                              title: 'Community Reports',
+                              initialFilter: _selectedStatusFilter,
+                            ),
                           ),
                         );
                         _refreshAllData();
@@ -470,7 +474,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                       onTap: () async {
                         await Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => MyReportsScreen(initialFilter: _selectedStatusFilter),
+                            builder: (_) => MyReportsScreen(
+                              onlyMyReports: true,
+                              title: 'My Reports',
+                              initialFilter: _selectedStatusFilter,
+                            ),
                           ),
                         );
                         _refreshAllData();
@@ -531,7 +539,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     onPressed: () async {
                       await Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => MyReportsScreen(initialFilter: _selectedStatusFilter),
+                          builder: (_) => MyReportsScreen(
+                            onlyMyReports: false,
+                            title: 'Community Reports',
+                            initialFilter: _selectedStatusFilter,
+                          ),
                         ),
                       );
                       _refreshAllData();
@@ -646,7 +658,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Report an Issue',
         onPressed: () async {
           await Navigator.of(context).push(
             MaterialPageRoute(
@@ -655,8 +668,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           );
           _refreshAllData();
         },
-        icon: const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Report an Issue'),
+        child: const Icon(Icons.add_a_photo_outlined),
       ),
     );
   }
@@ -819,25 +831,33 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           color: theme.colorScheme.primary,
                         ),
                         const SizedBox(width: 4),
-                        Text(
-                          report.category,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.primary,
+                        Flexible(
+                          child: Text(
+                            report.category,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: theme.colorScheme.primary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: 4),
                         Text(
                           '•',
                           style: TextStyle(color: Colors.grey.shade400, fontSize: 11),
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          report.formattedTimeAgo,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            report.formattedTimeAgo,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

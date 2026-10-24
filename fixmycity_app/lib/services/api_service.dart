@@ -247,6 +247,7 @@ class ApiService {
   Future<List<ReportModel>> fetchReports({
     String? status,
     String? issueType,
+    String? userId,
     int page = 1,
     int limit = 100,
     String? authToken,
@@ -275,6 +276,7 @@ class ApiService {
       'limit': limit.toString(),
       if (status != null && status.isNotEmpty) 'status': status,
       if (issueType != null && issueType.isNotEmpty) 'issue_type': issueType,
+      if (userId != null && userId.isNotEmpty) 'user_id': userId,
     };
 
     final uri = Uri.parse(endpoint).replace(queryParameters: queryParams);

@@ -143,16 +143,18 @@ export const listReports = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    const { status, issue_type, page, limit } = validation.data;
+    const { status, issue_type, user_id, page, limit } = validation.data;
     const skip = (page - 1) * limit;
 
     const where: {
       status?: typeof status;
       issue_type?: typeof issue_type;
+      user_id?: string;
     } = {};
 
     if (status) where.status = status;
     if (issue_type) where.issue_type = issue_type;
+    if (user_id) where.user_id = user_id;
 
     const [reports, total] = await Promise.all([
       prisma.report.findMany({

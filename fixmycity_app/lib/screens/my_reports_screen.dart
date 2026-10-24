@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/report_model.dart';
 import '../services/api_service.dart';
 import 'report_detail_screen.dart';
+import 'report_submission_screen.dart';
 
 class MyReportsScreen extends StatefulWidget {
   final String initialFilter;
+  final bool onlyMyReports;
+  final String? title;
 
   const MyReportsScreen({
     super.key,
     this.initialFilter = 'All',
+    this.onlyMyReports = false,
+    this.title,
   });
 
   @override
@@ -20,6 +26,14 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
   List<ReportModel> _reports = [];
   bool _isLoading = true;
   String? _errorMessage;
+
+  String? get _currentUserId {
+    try {
+      return Supabase.instance.client.auth.currentUser?.id;
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   void initState() {
@@ -35,10 +49,33 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
     });
 
     try {
-      final fetched = await ApiService().fetchReports(limit: 100);
+      final currentUid = _currentUserId;
+      // Fetch up to 100 reports from the backend
+      final fetched = await ApiService().fetchReports(
+        limit: 100,
+        userId: widget.onlyMyReports && currentUid != null ? currentUid : null,
+      );
+
+      List<ReportModel> scopedReports;
+      if (widget.onlyMyReports) {
+        // "My Reports": show ONLY this particular user's reports
+        if (currentUid != null) {
+          scopedReports = fetched.where((rep) => rep.userId == currentUid).toList();
+        } else {
+          scopedReports = [];
+        }
+      } else {
+        // "Community Reports": show all other persons' reports
+        if (currentUid != null) {
+          scopedReports = fetched.where((rep) => rep.userId != currentUid).toList();
+        } else {
+          scopedReports = fetched;
+        }
+      }
+
       if (mounted) {
         setState(() {
-          _reports = fetched;
+          _reports = scopedReports;
           _isLoading = false;
         });
       }
@@ -63,10 +100,12 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final displayedReports = _filteredReports;
+    final screenTitle = widget.title ??
+        (widget.onlyMyReports ? 'My Reports' : 'Community Reports');
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Community Reports'),
+        title: Text(screenTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
@@ -156,13 +195,20 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       Icon(
-                                        Icons.inbox_outlined,
+                                        widget.onlyMyReports
+                                            ? Icons.assignment_outlined
+                                            : Icons.groups_outlined,
                                         size: 64,
                                         color: Colors.grey.shade400,
                                       ),
                                       const SizedBox(height: 16),
                                       Text(
-                                        'No $_selectedFilter reports found',
+                                        _selectedFilter == 'All'
+                                            ? (widget.onlyMyReports
+                                                ? 'No reports submitted yet'
+                                                : 'No community reports found')
+                                            : 'No $_selectedFilter reports found',
+                                        textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: Colors.grey.shade700,
                                           fontSize: 16,
@@ -171,13 +217,35 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                                       ),
                                       const SizedBox(height: 8),
                                       Text(
-                                        'Pull down to refresh or change the filter above.',
+                                        widget.onlyMyReports
+                                            ? 'Reports you submit will appear here so you can track municipal status.'
+                                            : 'Reports submitted by other community members will appear here.',
                                         textAlign: TextAlign.center,
                                         style: TextStyle(
                                           color: Colors.grey.shade500,
                                           fontSize: 13,
                                         ),
                                       ),
+                                      if (widget.onlyMyReports) ...[
+                                        const SizedBox(height: 20),
+                                        ElevatedButton.icon(
+                                          onPressed: () async {
+                                            await Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) => const ReportSubmissionScreen(),
+                                              ),
+                                            );
+                                            _fetchReports();
+                                          },
+                                          icon: const Icon(Icons.add_a_photo_outlined),
+                                          label: const Text('File a Report'),
+                                          style: ElevatedButton.styleFrom(
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
                                   ),
                                 ),
@@ -300,26 +368,34 @@ class _MyReportsScreenState extends State<MyReportsScreen> {
                                                       color: theme.colorScheme.primary,
                                                     ),
                                                     const SizedBox(width: 4),
-                                                    Text(
-                                                      report.category,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        fontWeight: FontWeight.w500,
-                                                        color: theme.colorScheme.primary,
+                                                    Flexible(
+                                                      child: Text(
+                                                        report.category,
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w500,
+                                                          color: theme.colorScheme.primary,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
-                                                    const Spacer(),
+                                                    const SizedBox(width: 6),
                                                     Icon(
                                                       Icons.access_time_rounded,
-                                                      size: 13,
+                                                      size: 12,
                                                       color: Colors.grey.shade500,
                                                     ),
-                                                    const SizedBox(width: 4),
-                                                    Text(
-                                                      report.formattedTimeAgo,
-                                                      style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: Colors.grey.shade500,
+                                                    const SizedBox(width: 3),
+                                                    Flexible(
+                                                      child: Text(
+                                                        report.formattedTimeAgo,
+                                                        style: TextStyle(
+                                                          fontSize: 11,
+                                                          color: Colors.grey.shade500,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
                                                       ),
                                                     ),
                                                   ],

@@ -243,16 +243,127 @@ class ApiService {
     }
   }
 
-  /// Fetch all public infrastructure damage reports.
-  Future<List<ReportModel>> fetchReports({int page = 1, int limit = 20}) async {
-    // Stub implementation: Will call GET $baseUrl/reports
-    throw UnimplementedError('fetchReports() has not been implemented yet.');
+  /// Fetch public infrastructure damage reports from the backend.
+  Future<List<ReportModel>> fetchReports({
+    String? status,
+    String? issueType,
+    int page = 1,
+    int limit = 100,
+    String? authToken,
+  }) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    if (rawUrl.isEmpty) {
+      throw const ReportSubmissionException(
+        'Backend URL is not configured. Check BACKEND_API_URL in .env.',
+      );
+    }
+
+    String? token = authToken;
+    if (token == null) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final endpoint = cleanBase.endsWith('/api') ? '$cleanBase/reports' : '$cleanBase/api/v1/reports';
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (issueType != null && issueType.isNotEmpty) 'issue_type': issueType,
+    };
+
+    final uri = Uri.parse(endpoint).replace(queryParameters: queryParams);
+
+    try {
+      final httpClient = client ?? http.Client();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        final List<dynamic> rawList = decoded is Map<String, dynamic> && decoded['data'] is List
+            ? decoded['data'] as List<dynamic>
+            : (decoded is List ? decoded : []);
+        return rawList
+            .whereType<Map<String, dynamic>>()
+            .map((item) => ReportModel.fromMap(item))
+            .toList();
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException(
+          'Your session expired, please log in again.',
+        );
+      }
+
+      throw ReportSubmissionException('Failed to fetch reports (HTTP ${response.statusCode})');
+    } catch (e) {
+      debugPrint('ApiService.fetchReports error: $e');
+      rethrow;
+    }
   }
 
   /// Fetch details of a single report by ID.
-  Future<ReportModel> fetchReportById(String id) async {
-    // Stub implementation: Will call GET $baseUrl/reports/$id
-    throw UnimplementedError('fetchReportById() has not been implemented yet.');
+  Future<ReportModel> fetchReportById(String id, {String? authToken}) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    if (rawUrl.isEmpty) {
+      throw const ReportSubmissionException(
+        'Backend URL is not configured. Check BACKEND_API_URL in .env.',
+      );
+    }
+
+    String? token = authToken;
+    if (token == null) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final url = cleanBase.endsWith('/api') ? '$cleanBase/reports/$id' : '$cleanBase/api/v1/reports/$id';
+
+    try {
+      final httpClient = client ?? http.Client();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(Uri.parse(url), headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return ReportModel.fromMap(decoded);
+        }
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException(
+          'Your session expired, please log in again.',
+        );
+      }
+
+      throw ReportSubmissionException('Failed to fetch report details (HTTP ${response.statusCode})');
+    } catch (e) {
+      debugPrint('ApiService.fetchReportById error: $e');
+      rethrow;
+    }
   }
 
   /// Create and submit a new damage report to the backend.

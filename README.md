@@ -130,4 +130,11 @@ The project is structured as a monorepo containing:
 - **Threshold Calibration Tooling**: Created `/backend/test-data` scaffold and `npm run calibrate:threshold` (`src/scripts/calibrateThreshold.ts`) to benchmark real image pairs, compute Hamming distance statistics, and recommend optimal `DEDUP_HAMMING_THRESHOLD` values.
 - **Offline Results Logging**: Auto-saved full calibration metrics, separation gaps, and overlap warnings to `test-data/calibration-results.txt` (git-ignored).
 
+### **Oct 24, 2026 — Live Community Reports Feed, Status Metrics & Interactive Detail Screen**
+- **Dynamic Status Metrics**: Replaced static mock stats on the Home Screen with live counts calculated from database records (`SUBMITTED` -> Active, `UNDER_REVIEW`/`SCHEDULED` -> In Progress, `FIXED` -> Resolved).
+- **Interactive Status Filtering**: Enabled tap-to-filter on Active, In Progress, and Resolved cards with visual active states, allowing users to instantly filter the feed or reset to All.
+- **Live Community Activity Feed**: Connected the Home Screen to `GET /api/v1/reports`, rendering real reports with photo thumbnails, issue icons, relative timestamps, and duplicate cluster confirmation badges (`👥 N confirmed`).
+- **Dedicated Report Detail View (`ReportDetailScreen`)**: Built an interactive report screen featuring full-screen zoomable photo viewer, status timeline explanations, severity badges, duplicate cluster details, GPS coordinates with clipboard copy, and refresh capabilities.
+- **API & Model Enhancements**: Implemented `fetchReports` and `fetchReportById` in `ApiService`, updated `ReportModel` with status normalization and time-ago formatting, and upgraded `MyReportsScreen` to display live filtered reports.
+
 ---

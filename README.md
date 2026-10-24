@@ -130,11 +130,12 @@ The project is structured as a monorepo containing:
 - **Threshold Calibration Tooling**: Created `/backend/test-data` scaffold and `npm run calibrate:threshold` (`src/scripts/calibrateThreshold.ts`) to benchmark real image pairs, compute Hamming distance statistics, and recommend optimal `DEDUP_HAMMING_THRESHOLD` values.
 - **Offline Results Logging**: Auto-saved full calibration metrics, separation gaps, and overlap warnings to `test-data/calibration-results.txt` (git-ignored).
 
-### **Oct 24, 2026 — Live Community Reports Feed, Status Metrics & Interactive Detail Screen**
-- **Dynamic Status Metrics**: Replaced static mock stats on the Home Screen with live counts calculated from database records (`SUBMITTED` -> Active, `UNDER_REVIEW`/`SCHEDULED` -> In Progress, `FIXED` -> Resolved).
-- **Interactive Status Filtering**: Enabled tap-to-filter on Active, In Progress, and Resolved cards with visual active states, allowing users to instantly filter the feed or reset to All.
-- **Live Community Activity Feed**: Connected the Home Screen to `GET /api/v1/reports`, rendering real reports with photo thumbnails, issue icons, relative timestamps, and duplicate cluster confirmation badges (`👥 N confirmed`).
-- **Dedicated Report Detail View (`ReportDetailScreen`)**: Built an interactive report screen featuring full-screen zoomable photo viewer, status timeline explanations, severity badges, duplicate cluster details, GPS coordinates with clipboard copy, and refresh capabilities.
-- **API & Model Enhancements**: Implemented `fetchReports` and `fetchReportById` in `ApiService`, updated `ReportModel` with status normalization and time-ago formatting, and upgraded `MyReportsScreen` to display live filtered reports.
+### **Oct 24, 2026 — Live Community Feed, Scoped Reports & Mobile Device Support**
+- **Live Metrics & Filtering**: Connected Home Screen status cards (`Active`, `In Progress`, `Resolved`) to live database counts with instant tap-to-filter capabilities.
+- **Live Activity Feed**: Rendered real community reports on the Home Screen with photo thumbnails, issue icons, relative timestamps, and cluster badges (`👥 N confirmed`).
+- **Interactive Report Details (`ReportDetailScreen`)**: Added full-screen zoomable photo inspection, status progress timeline, category/severity badges, cluster duplicate detection info, and GPS clipboard copy.
+- **Scoped Community & My Reports**: Separated Quick Actions into **"Community Reports"** (filtering out own reports to show neighbor activity) and **"My Reports"** (showing only the authenticated citizen's submissions).
+- **Backend User Filtering**: Added optional `user_id` query parameter to `GET /api/v1/reports` and updated `ApiService.fetchReports` for server-side filtering.
+- **Supabase Auth & User Sync**: Verified OAuth custom URL scheme handling (`fixmycity://login-callback`) and configured PostgreSQL database triggers syncing new signups into `public.users`.
 
 ---

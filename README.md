@@ -139,3 +139,14 @@ The project is structured as a monorepo containing:
 - **Supabase Auth & User Sync**: Verified OAuth custom URL scheme handling (`fixmycity://login-callback`) and configured PostgreSQL database triggers syncing new signups into `public.users`.
 
 ---
+
+## Week 5 — Prioritization Logic
+
+### **Oct 30, 2026 — Cluster Priority Scoring Engine & Automated Recomputation**
+- **Location Risk Support**: Added `near_sensitive_location` boolean to `Report` model with database migration and updated `createReport` validation.
+- **Scoring Config**: Created `priority.config.ts` with tunable weights (`SEVERITY`, `CONFIRMATION`, `LOCATION_RISK`, `AGE`) and caps (`CONFIRMATION_CAP: 10`, `AGE_CAP_DAYS: 30`).
+- **Priority Scoring Engine**: Implemented pure `computePriorityScore` function and cluster-level `recomputeClusterPriority` in `priority.service.ts`.
+- **Lifecycle Recomputation Hooks**: Hooked automatic priority updates into `ClusteringService` post-merge/create and `updateReportStatus` on resolution.
+- **Batch Recompute & Test Scripts**: Added `npm run recompute:priorities` CLI for ranking all clusters and `npm run test:priority` for unit testing scoring rules and caps.
+
+---

@@ -56,9 +56,10 @@ model Report {
   lat           Float
   lng           Float
   issue_type    IssueType
-  severity      Severity
-  notes         String?
-  status        ReportStatus         @default(SUBMITTED)
+  severity                Severity
+  notes                   String?
+  near_sensitive_location Boolean              @default(false)
+  status                  ReportStatus         @default(SUBMITTED)
   cluster_id    String?              @db.Uuid
   created_at    DateTime             @default(now())
 

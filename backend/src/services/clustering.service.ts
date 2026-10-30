@@ -2,6 +2,7 @@ import { Report } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { ProximityService, NearbyReport } from './proximity.service';
 import { hammingDistance } from '../utils/hamming';
+import { recomputeClusterPriority } from './priority.service';
 
 /**
  * Result indicating the outcome of evaluating a report against nearby candidates.
@@ -93,57 +94,71 @@ export class ClusteringService {
       );
 
       // 2. Check if the incoming report has a valid pHash
+      let result: ClusterAssignmentResult;
       if (!report.image_hash) {
         console.warn(
           `[ClusteringService] Report ${report.id} has no image_hash (pHash was skipped/failed). Falling back to creating a new cluster.`
         );
-        return await this.createNewCluster(report);
-      }
+        result = await this.createNewCluster(report);
+      } else {
+        // 3. Evaluate visual similarity against candidates with valid pHashes
+        const threshold = getHammingThreshold();
+        let bestMatch: {
+          candidate: NearbyReport;
+          distance: number;
+        } | null = null;
 
-      // 3. Evaluate visual similarity against candidates with valid pHashes
-      const threshold = getHammingThreshold();
-      let bestMatch: {
-        candidate: NearbyReport;
-        distance: number;
-      } | null = null;
-
-      for (const candidate of candidates) {
-        if (!candidate.image_hash) {
-          continue;
-        }
-
-        try {
-          const dist = hammingDistance(report.image_hash, candidate.image_hash);
-
-          // 4. Candidate must be at or below the threshold
-          if (dist <= threshold) {
-            // Pick candidate with smallest Hamming distance (tie-break by closer distance_meters)
-            if (
-              !bestMatch ||
-              dist < bestMatch.distance ||
-              (dist === bestMatch.distance && candidate.distance_meters < bestMatch.candidate.distance_meters)
-            ) {
-              bestMatch = { candidate, distance: dist };
-            }
+        for (const candidate of candidates) {
+          if (!candidate.image_hash) {
+            continue;
           }
-        } catch (err) {
-          console.warn(
-            `[ClusteringService] Failed computing Hamming distance between report ${report.id} and candidate ${candidate.id}:`,
-            err instanceof Error ? err.message : err
+
+          try {
+            const dist = hammingDistance(report.image_hash, candidate.image_hash);
+
+            // 4. Candidate must be at or below the threshold
+            if (dist <= threshold) {
+              // Pick candidate with smallest Hamming distance (tie-break by closer distance_meters)
+              if (
+                !bestMatch ||
+                dist < bestMatch.distance ||
+                (dist === bestMatch.distance && candidate.distance_meters < bestMatch.candidate.distance_meters)
+              ) {
+                bestMatch = { candidate, distance: dist };
+              }
+            }
+          } catch (err) {
+            console.warn(
+              `[ClusteringService] Failed computing Hamming distance between report ${report.id} and candidate ${candidate.id}:`,
+              err instanceof Error ? err.message : err
+            );
+          }
+        }
+
+        // 5. If a best match was found, merge into the cluster
+        if (bestMatch) {
+          result = await this.mergeIntoCluster(report, bestMatch.candidate, bestMatch.distance);
+        } else {
+          // 6. No match found within threshold -> create a brand new cluster
+          console.log(
+            `[ClusteringService] No visual match found within threshold <= ${threshold} bits for report ${report.id} (${candidates.length} nearby candidate(s) checked). Creating a new cluster.`
           );
+          result = await this.createNewCluster(report);
         }
       }
 
-      // 5. If a best match was found, merge into the cluster
-      if (bestMatch) {
-        return await this.mergeIntoCluster(report, bestMatch.candidate, bestMatch.distance);
+      // Recompute priority score for the cluster after the merge/create transaction has committed.
+      // Availability-over-completeness: Non-blocking error handling.
+      try {
+        await recomputeClusterPriority(result.clusterId);
+      } catch (priorityError) {
+        console.error(
+          `[ClusteringService] Failed to recompute priority score for cluster ${result.clusterId}:`,
+          priorityError instanceof Error ? priorityError.message : priorityError
+        );
       }
 
-      // 6. No match found within threshold -> create a brand new cluster
-      console.log(
-        `[ClusteringService] No visual match found within threshold <= ${threshold} bits for report ${report.id} (${candidates.length} nearby candidate(s) checked). Creating a new cluster.`
-      );
-      return await this.createNewCluster(report);
+      return result;
     } catch (error) {
       console.error(
         `[ClusteringService] Error evaluating cluster assignment for report ${report.id}:`,

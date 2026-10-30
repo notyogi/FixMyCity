@@ -12,6 +12,7 @@ import {
   ClusteringException,
   ClusterAssignmentResult,
 } from '../services/clustering.service';
+import { recomputeClusterPriority } from '../services/priority.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -75,6 +76,7 @@ export const createReport = async (req: Request, res: Response): Promise<void> =
         issue_type: validation.data.issue_type,
         severity: validation.data.severity,
         notes: validation.data.notes || null,
+        near_sensitive_location: validation.data.near_sensitive_location,
         status: ReportStatus.SUBMITTED,
       },
     });
@@ -261,6 +263,19 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
         status: validation.data.status,
       },
     });
+
+    // Recompute cluster priority score if the report is assigned to a cluster
+    // Availability over completeness: Non-blocking error handling
+    if (updatedReport.cluster_id) {
+      try {
+        await recomputeClusterPriority(updatedReport.cluster_id);
+      } catch (priorityError) {
+        console.error(
+          `[updateReportStatus] Failed to recompute priority score for cluster ${updatedReport.cluster_id}:`,
+          priorityError instanceof Error ? priorityError.message : priorityError
+        );
+      }
+    }
 
     res.status(200).json(updatedReport);
   } catch (error) {

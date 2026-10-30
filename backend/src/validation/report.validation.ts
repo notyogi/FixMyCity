@@ -18,6 +18,7 @@ export const createReportSchema = z.object({
     message: `severity must be one of: ${Object.values(Severity).join(', ')}`,
   }),
   notes: z.string().optional().nullable(),
+  near_sensitive_location: z.boolean().optional().default(false),
 });
 
 export const updateStatusSchema = z.object({

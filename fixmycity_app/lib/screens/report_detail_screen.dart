@@ -262,6 +262,34 @@ class _ReportDetailScreenState extends State<ReportDetailScreen> {
               ),
             ),
 
+            // Sensitive Location Risk Badge (when true)
+            if (report.nearSensitiveLocation) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade300),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.shield_rounded, color: Colors.amber.shade900, size: 18),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Near sensitive location',
+                      style: TextStyle(
+                        color: Colors.amber.shade900,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+
             const SizedBox(height: 16),
 
             // Quick Info Grid

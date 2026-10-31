@@ -82,13 +82,13 @@ enum Severity {
   String get description {
     switch (this) {
       case Severity.LOW:
-        return 'Minor issue, not urgent';
+        return 'Minor, not urgent';
       case Severity.MEDIUM:
-        return 'Noticeable problem affecting daily flow';
+        return 'Should be fixed soon';
       case Severity.HIGH:
-        return 'Substantial disruption or damage';
+        return 'Significant hazard';
       case Severity.CRITICAL:
-        return 'Immediate safety hazard';
+        return 'Immediate safety risk';
     }
   }
 
@@ -123,6 +123,7 @@ class ReportModel {
   final IssueType issueType;
   final Severity severity;
   final String? notes;
+  final bool nearSensitiveLocation;
   final double latitude;
   final double longitude;
   final String? address;
@@ -143,6 +144,7 @@ class ReportModel {
     this.issueType = IssueType.OTHER,
     this.severity = Severity.LOW,
     this.notes,
+    this.nearSensitiveLocation = false,
     required this.latitude,
     required this.longitude,
     this.address,
@@ -224,6 +226,7 @@ class ReportModel {
     IssueType? issueType,
     Severity? severity,
     String? notes,
+    bool? nearSensitiveLocation,
     double? latitude,
     double? longitude,
     String? address,
@@ -244,6 +247,7 @@ class ReportModel {
       issueType: issueType ?? this.issueType,
       severity: severity ?? this.severity,
       notes: notes ?? this.notes,
+      nearSensitiveLocation: nearSensitiveLocation ?? this.nearSensitiveLocation,
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       address: address ?? this.address,
@@ -285,6 +289,10 @@ class ReportModel {
     final latNum = (map['lat'] ?? map['latitude'] ?? 0.0) as num;
     final lngNum = (map['lng'] ?? map['longitude'] ?? 0.0) as num;
 
+    // Location risk flag (default false if absent or null)
+    final nearSensitiveLocVal = map['near_sensitive_location'] ?? map['nearSensitiveLocation'];
+    final bool nearSensitiveLocationVal = nearSensitiveLocVal == true || nearSensitiveLocVal == 1;
+
     // Cluster info (supports nested cluster or direct confirmation_count)
     String? clusterIdVal = map['cluster_id'] as String? ?? map['clusterId'] as String?;
     int? confirmCountVal;
@@ -322,6 +330,7 @@ class ReportModel {
       issueType: parsedIssueType,
       severity: parsedSeverity,
       notes: notesVal,
+      nearSensitiveLocation: nearSensitiveLocationVal,
       latitude: latNum.toDouble(),
       longitude: lngNum.toDouble(),
       address: map['address'] as String?,
@@ -345,6 +354,7 @@ class ReportModel {
       'issue_type': issueType.name,
       'severity': severity.name,
       'notes': notes,
+      'near_sensitive_location': nearSensitiveLocation,
       'latitude': latitude,
       'longitude': longitude,
       'address': address,

@@ -34,6 +34,7 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
   // Step 2: Tagging state
   IssueType? _selectedIssueType;
   Severity? _selectedSeverity;
+  bool _nearSensitiveLocation = false;
   final TextEditingController _notesController = TextEditingController();
 
   // Step 3: Submission state
@@ -687,6 +688,17 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               filled: true,
             ),
+            selectedItemBuilder: (context) {
+              return Severity.values.map((sev) {
+                return Row(
+                  children: [
+                    _buildSeverityIndicator(sev),
+                    const SizedBox(width: 10),
+                    Text(sev.displayName),
+                  ],
+                );
+              }).toList();
+            },
             items: Severity.values.map((sev) {
               return DropdownMenuItem<Severity>(
                 value: sev,
@@ -694,7 +706,20 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
                   children: [
                     _buildSeverityIndicator(sev),
                     const SizedBox(width: 10),
-                    Text(sev.displayName),
+                    Text(
+                      sev.displayName,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '(${sev.description})',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                   ],
                 ),
               );
@@ -710,7 +735,7 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
             Padding(
               padding: const EdgeInsets.only(left: 4.0),
               child: Text(
-                _selectedSeverity!.description,
+                '${_selectedSeverity!.displayName}: ${_selectedSeverity!.description}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.primary,
                   fontStyle: FontStyle.italic,
@@ -718,7 +743,30 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
               ),
             ),
           ],
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+
+          // Location Risk Checkbox
+          CheckboxListTile(
+            value: _nearSensitiveLocation,
+            onChanged: (val) {
+              setState(() => _nearSensitiveLocation = val ?? false);
+            },
+            title: const Text(
+              'Near a school, hospital, or other sensitive place',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              'Helps authorities prioritise issues where more people are at risk.',
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+          ),
+          const SizedBox(height: 16),
 
           // Optional Description / Notes Field
           Text(
@@ -747,6 +795,7 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
                           notes: _notesController.text.trim().isNotEmpty
                               ? _notesController.text.trim()
                               : null,
+                          nearSensitiveLocation: _nearSensitiveLocation,
                         );
                     _goToStep(2);
                   }
@@ -832,6 +881,14 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
                     customValueWidget: reportState.severity != null
                         ? _buildSeverityBadge(reportState.severity!)
                         : null,
+                  ),
+                  const SizedBox(height: 12),
+
+                  _buildSummaryRow(
+                    context,
+                    label: 'Near sensitive location',
+                    value: reportState.nearSensitiveLocation ? 'Yes' : 'No',
+                    icon: Icons.shield_outlined,
                   ),
                   const SizedBox(height: 12),
 

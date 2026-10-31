@@ -130,6 +130,7 @@ class SyncService {
         issueType: report.issueType,
         severity: report.severity,
         notes: report.notes,
+        nearSensitiveLocation: report.nearSensitiveLocation,
         authToken: _authToken,
       );
 

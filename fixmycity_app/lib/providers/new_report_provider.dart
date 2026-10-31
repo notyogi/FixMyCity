@@ -31,6 +31,7 @@ class NewReportState {
   final IssueType? issueType;
   final Severity? severity;
   final String? notes;
+  final bool nearSensitiveLocation;
 
   const NewReportState({
     this.imageFilePath,
@@ -39,6 +40,7 @@ class NewReportState {
     this.issueType,
     this.severity,
     this.notes,
+    this.nearSensitiveLocation = false,
   });
 
   NewReportState copyWith({
@@ -48,6 +50,7 @@ class NewReportState {
     IssueType? issueType,
     Severity? severity,
     String? notes,
+    bool? nearSensitiveLocation,
   }) {
     return NewReportState(
       imageFilePath: imageFilePath ?? this.imageFilePath,
@@ -56,6 +59,7 @@ class NewReportState {
       issueType: issueType ?? this.issueType,
       severity: severity ?? this.severity,
       notes: notes ?? this.notes,
+      nearSensitiveLocation: nearSensitiveLocation ?? this.nearSensitiveLocation,
     );
   }
 
@@ -66,7 +70,7 @@ class NewReportState {
 
   @override
   String toString() {
-    return 'NewReportState(image: $imageFilePath, lat: $latitude, lng: $longitude, issue: $issueType, severity: $severity, notes: $notes)';
+    return 'NewReportState(image: $imageFilePath, lat: $latitude, lng: $longitude, issue: $issueType, severity: $severity, notes: $notes, nearSensitiveLocation: $nearSensitiveLocation)';
   }
 }
 
@@ -89,12 +93,18 @@ class NewReportNotifier extends Notifier<NewReportState> {
     required IssueType issueType,
     required Severity severity,
     String? notes,
+    bool nearSensitiveLocation = false,
   }) {
     state = state.copyWith(
       issueType: issueType,
       severity: severity,
       notes: notes,
+      nearSensitiveLocation: nearSensitiveLocation,
     );
+  }
+
+  void setNearSensitiveLocation(bool value) {
+    state = state.copyWith(nearSensitiveLocation: value);
   }
 
   void updateNotes(String notes) {
@@ -159,6 +169,7 @@ class NewReportNotifier extends Notifier<NewReportState> {
     final issueType = state.issueType;
     final severity = state.severity;
     final notes = state.notes;
+    final nearSensitiveLocation = state.nearSensitiveLocation;
 
     // Step 1: Validate required fields
     if (imagePath == null || imagePath.isEmpty) {
@@ -194,6 +205,7 @@ class NewReportNotifier extends Notifier<NewReportState> {
         issueType: issueType.name,
         severity: severity.name,
         notes: notes,
+        nearSensitiveLocation: nearSensitiveLocation,
         createdAt: DateTime.now().toIso8601String(),
         syncStatus: 'pending',
         retryCount: 0,
@@ -220,6 +232,7 @@ class NewReportNotifier extends Notifier<NewReportState> {
       issueType: issueType.name,
       severity: severity.name,
       notes: notes,
+      nearSensitiveLocation: nearSensitiveLocation,
       authToken: authToken,
     );
 

@@ -60,7 +60,7 @@ void main() {
     test('Severity display names and descriptions', () {
       expect(Severity.LOW.displayName, 'Low');
       expect(Severity.CRITICAL.displayName, 'Critical');
-      expect(Severity.CRITICAL.description, contains('Immediate safety hazard'));
+      expect(Severity.CRITICAL.description, contains('Immediate safety risk'));
       expect(Severity.fromString('HIGH'), Severity.HIGH);
     });
   });

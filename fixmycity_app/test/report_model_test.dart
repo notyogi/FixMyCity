@@ -39,6 +39,24 @@ void main() {
       expect(model.clusterId, '89b275bf-1941-4561-9e79-cb18ec10d866');
       expect(model.confirmationCount, 3);
       expect(model.formattedTimeAgo, isNotEmpty);
+      expect(model.nearSensitiveLocation, isFalse);
+    });
+
+    test('deserializes near_sensitive_location when true', () {
+      final jsonWithRisk = {
+        'id': 'risk-report-1',
+        'image_url': 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+        'lat': 12.9716,
+        'lng': 77.5946,
+        'issue_type': 'POTHOLE',
+        'severity': 'CRITICAL',
+        'near_sensitive_location': true,
+        'status': 'SUBMITTED',
+        'created_at': '2026-10-31T15:00:00.000Z',
+      };
+
+      final model = ReportModel.fromMap(jsonWithRisk);
+      expect(model.nearSensitiveLocation, isTrue);
     });
 
     test('normalizes statuses correctly', () {

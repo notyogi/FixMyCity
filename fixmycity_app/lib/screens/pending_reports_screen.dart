@@ -269,10 +269,36 @@ class _PendingReportsScreenState extends State<PendingReportsScreen> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 8,
+                        runSpacing: 4,
                         children: [
                           _buildSeverityChip(severityEnum),
-                          const SizedBox(width: 8),
+                          if (report.nearSensitiveLocation)
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.purple.shade50,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: Colors.purple.shade200),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.shield_outlined, size: 10, color: Colors.purple.shade800),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    'Near sensitive location',
+                                    style: TextStyle(
+                                      color: Colors.purple.shade800,
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                           Text(
                             '${report.latitude.toStringAsFixed(3)}, ${report.longitude.toStringAsFixed(3)}',
                             style: TextStyle(

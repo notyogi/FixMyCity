@@ -19,6 +19,9 @@ class PendingReport {
   /// Optional citizen notes/description.
   final String? notes;
 
+  /// Whether the report is located near a sensitive location (school, hospital, etc.).
+  final bool nearSensitiveLocation;
+
   /// ISO 8601 string of when the report was queued locally.
   final String createdAt;
 
@@ -39,6 +42,7 @@ class PendingReport {
     required this.issueType,
     required this.severity,
     this.notes,
+    this.nearSensitiveLocation = false,
     required this.createdAt,
     this.syncStatus = 'pending',
     this.retryCount = 0,
@@ -55,6 +59,7 @@ class PendingReport {
       'issue_type': issueType,
       'severity': severity,
       'notes': notes,
+      'near_sensitive_location': nearSensitiveLocation ? 1 : 0,
       'created_at': createdAt,
       'sync_status': syncStatus,
       'retry_count': retryCount,
@@ -64,6 +69,9 @@ class PendingReport {
 
   /// Instantiates a [PendingReport] from an SQLite record map.
   factory PendingReport.fromMap(Map<String, dynamic> map) {
+    final nearVal = map['near_sensitive_location'];
+    final bool nearSensitiveLocation = nearVal == 1 || nearVal == true;
+
     return PendingReport(
       id: map['id'] as String,
       imageFilePath: map['image_file_path'] as String,
@@ -72,6 +80,7 @@ class PendingReport {
       issueType: map['issue_type'] as String,
       severity: map['severity'] as String,
       notes: map['notes'] as String?,
+      nearSensitiveLocation: nearSensitiveLocation,
       createdAt: map['created_at'] as String,
       syncStatus: (map['sync_status'] as String?) ?? 'pending',
       retryCount: (map['retry_count'] as int?) ?? 0,
@@ -87,6 +96,7 @@ class PendingReport {
     String? issueType,
     String? severity,
     String? notes,
+    bool? nearSensitiveLocation,
     String? createdAt,
     String? syncStatus,
     int? retryCount,
@@ -100,6 +110,7 @@ class PendingReport {
       issueType: issueType ?? this.issueType,
       severity: severity ?? this.severity,
       notes: notes ?? this.notes,
+      nearSensitiveLocation: nearSensitiveLocation ?? this.nearSensitiveLocation,
       createdAt: createdAt ?? this.createdAt,
       syncStatus: syncStatus ?? this.syncStatus,
       retryCount: retryCount ?? this.retryCount,

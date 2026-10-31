@@ -7,7 +7,7 @@ import '../models/pending_report_model.dart';
 /// SQLite database helper managing the local offline queue for damage reports.
 class SQLiteHelper {
   static const _databaseName = 'fixmycity_local.db';
-  static const _databaseVersion = 2;
+  static const _databaseVersion = 3;
   static const tablePendingReports = 'pending_reports';
 
   SQLiteHelper._privateConstructor();
@@ -57,6 +57,7 @@ class SQLiteHelper {
         issue_type TEXT NOT NULL,
         severity TEXT NOT NULL,
         notes TEXT,
+        near_sensitive_location INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         sync_status TEXT NOT NULL DEFAULT 'pending',
         retry_count INTEGER NOT NULL DEFAULT 0,
@@ -71,6 +72,16 @@ class SQLiteHelper {
       final hasNotes = columns.any((col) => col['name'] == 'notes');
       if (!hasNotes) {
         await db.execute('ALTER TABLE $tablePendingReports ADD COLUMN notes TEXT');
+      }
+    }
+    if (oldVersion < 3) {
+      final columns = await db.rawQuery('PRAGMA table_info($tablePendingReports)');
+      final hasNearSensitiveLocation =
+          columns.any((col) => col['name'] == 'near_sensitive_location');
+      if (!hasNearSensitiveLocation) {
+        await db.execute(
+          'ALTER TABLE $tablePendingReports ADD COLUMN near_sensitive_location INTEGER NOT NULL DEFAULT 0',
+        );
       }
     }
   }

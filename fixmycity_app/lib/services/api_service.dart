@@ -102,6 +102,7 @@ class ApiService {
     required String issueType,
     required String severity,
     String? notes,
+    bool nearSensitiveLocation = false,
     String? authToken,
   }) async {
     final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
@@ -146,6 +147,7 @@ class ApiService {
               'lng': lng,
               'issue_type': issueType,
               'severity': severity,
+              'near_sensitive_location': nearSensitiveLocation,
               if (notes != null && notes.trim().isNotEmpty) 'notes': notes.trim(),
             }),
           )

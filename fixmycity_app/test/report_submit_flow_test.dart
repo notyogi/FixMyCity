@@ -132,6 +132,45 @@ void main() {
       expect(result['notes'], 'garbage needs to collected immediately');
     });
 
+    test('successful 201 response with nearSensitiveLocation true sends flag in payload', () async {
+      final mockClient = MockClient((request) async {
+        final body = jsonDecode(request.body);
+        expect(body['near_sensitive_location'], true);
+
+        return http.Response(
+          jsonEncode({
+            'id': 'sensitive-loc-report-1',
+            'image_url': 'https://example.com/photo.jpg',
+            'lat': 28.6139,
+            'lng': 77.2090,
+            'issue_type': 'POTHOLE',
+            'severity': 'CRITICAL',
+            'near_sensitive_location': true,
+            'status': 'SUBMITTED',
+          }),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final apiService = ApiService(
+        baseUrl: 'http://localhost:5001',
+        client: mockClient,
+      );
+
+      final result = await apiService.submitReport(
+        imageUrl: 'https://example.com/photo.jpg',
+        lat: 28.6139,
+        lng: 77.2090,
+        issueType: 'POTHOLE',
+        severity: 'CRITICAL',
+        nearSensitiveLocation: true,
+        authToken: 'mock-jwt-token',
+      );
+
+      expect(result['near_sensitive_location'], true);
+    });
+
     test('401 response throws NotAuthenticatedException', () async {
       final mockClient = MockClient((request) async {
         return http.Response(
@@ -302,6 +341,54 @@ void main() {
       expect(state.latitude, isNull);
       expect(state.issueType, isNull);
       expect(state.notes, isNull);
+      expect(state.nearSensitiveLocation, isFalse);
+    });
+
+    test('online submission passes nearSensitiveLocation true through to backend', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final notifier = container.read(newReportProvider.notifier);
+      notifier.setImagePath('/fake/image.jpg');
+      notifier.setLocation(28.6139, 77.2090);
+      notifier.setTags(
+        issueType: IssueType.POTHOLE,
+        severity: Severity.HIGH,
+        nearSensitiveLocation: true,
+      );
+
+      final fakeCloudinary = FakeCloudinaryService(
+        fakeUrl: 'https://res.cloudinary.com/test/image/upload/v1234/school_pothole.jpg',
+      );
+
+      final mockClient = MockClient((request) async {
+        final body = jsonDecode(request.body);
+        expect(body['near_sensitive_location'], true);
+        return http.Response(
+          jsonEncode({
+            'id': 'school-pothole-id',
+            'status': 'SUBMITTED',
+            'near_sensitive_location': true,
+          }),
+          201,
+        );
+      });
+
+      final fakeApiService = ApiService(
+        baseUrl: 'http://localhost:5001',
+        client: mockClient,
+      );
+
+      final result = await notifier.submitReport(
+        cloudinaryService: fakeCloudinary,
+        apiService: fakeApiService,
+        connectivityService: FakeOnlineConnectivityService(),
+        authToken: 'mock-token',
+      );
+
+      expect(result, SubmitResult.sentOnline);
+      final state = container.read(newReportProvider);
+      expect(state.nearSensitiveLocation, isFalse);
     });
 
     test('propagates ImageUploadException when Cloudinary fails without clearing state', () async {

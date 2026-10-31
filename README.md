@@ -149,4 +149,9 @@ The project is structured as a monorepo containing:
 - **Lifecycle Recomputation Hooks**: Hooked automatic priority updates into `ClusteringService` post-merge/create and `updateReportStatus` on resolution.
 - **Batch Recompute & Test Scripts**: Added `npm run recompute:priorities` CLI for ranking all clusters and `npm run test:priority` for unit testing scoring rules and caps.
 
----
+### **Oct 31, 2026 — Mobile Location-Risk Tagging, Offline Queue Migration & Sync**
+- **Severity Tagging Polish**: Standardized one-line severity hints (Low, Medium, High, Critical) in dropdown and ensured Severity selection is mandatory.
+- **Location-Risk Flag UI**: Added optional "Near a school, hospital, or other sensitive place" checkbox in tagging flow and displayed status in the summary review step.
+- **State & Online Pipeline**: Added `nearSensitiveLocation` to Riverpod `newReportProvider` and updated `ApiService.submitReport` to pass the flag in JSON payloads.
+- **Offline Queue & SQLite Migration**: Bumped SQLite database to v3 with `onUpgrade` column migration, updated `PendingReport` model, and ensured `SyncService` preserves the flag upon sync.
+- **UI Badges & Test Suite**: Added visual location-risk chips in offline queue and report details; expanded test suite covering online submissions, offline persistence, and legacy row syncs (31 tests passing).

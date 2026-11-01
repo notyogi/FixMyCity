@@ -4,6 +4,7 @@ import {
   createReportSchema,
   updateStatusSchema,
   listReportsQuerySchema,
+  priorityQueueQuerySchema,
 } from '../validation/report.validation';
 import { ReportStatus } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
@@ -13,6 +14,7 @@ import {
   ClusterAssignmentResult,
 } from '../services/clustering.service';
 import { recomputeClusterPriority } from '../services/priority.service';
+import { PriorityQueueService } from '../services/priorityQueue.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -286,3 +288,27 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
 
 // Backward-compatible alias
 export const getAllReports = listReports;
+
+/**
+ * 5. getPriorityQueue(req, res)
+ * Validates query parameters, retrieves ranked report clusters with freshness checks,
+ * and returns the priority queue for municipal dashboard operators.
+ */
+export const getPriorityQueue = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const validation = priorityQueueQuerySchema.safeParse(req.query);
+    if (!validation.success) {
+      res.status(400).json({
+        error: 'Invalid query parameters',
+        details: validation.error.issues,
+      });
+      return;
+    }
+
+    const result = await PriorityQueueService.getPriorityQueue(validation.data);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getPriorityQueue:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

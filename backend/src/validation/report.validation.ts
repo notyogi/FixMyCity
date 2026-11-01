@@ -35,6 +35,27 @@ export const listReportsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+// Coerce string query parameters like "true", "1", "false", "0" to boolean
+const booleanQueryParam = z.preprocess((val) => {
+  if (typeof val === 'string') {
+    const lower = val.trim().toLowerCase();
+    if (lower === 'true' || lower === '1') return true;
+    if (lower === 'false' || lower === '0') return false;
+  }
+  return val;
+}, z.boolean());
+
+export const priorityQueueQuerySchema = z.object({
+  status: z.nativeEnum(ReportStatus).optional(),
+  issue_type: z.nativeEnum(IssueType).optional(),
+  min_severity: z.nativeEnum(Severity).optional(),
+  near_sensitive_location: booleanQueryParam.optional(),
+  include_closed: booleanQueryParam.optional().default(false),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+});
+
 export type CreateReportInput = z.infer<typeof createReportSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 export type ListReportsQuery = z.infer<typeof listReportsQuerySchema>;
+export type PriorityQueueQuery = z.infer<typeof priorityQueueQuerySchema>;

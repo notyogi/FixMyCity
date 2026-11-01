@@ -155,3 +155,10 @@ The project is structured as a monorepo containing:
 - **State & Online Pipeline**: Added `nearSensitiveLocation` to Riverpod `newReportProvider` and updated `ApiService.submitReport` to pass the flag in JSON payloads.
 - **Offline Queue & SQLite Migration**: Bumped SQLite database to v3 with `onUpgrade` column migration, updated `PendingReport` model, and ensured `SyncService` preserves the flag upon sync.
 - **UI Badges & Test Suite**: Added visual location-risk chips in offline queue and report details; expanded test suite covering online submissions, offline persistence, and legacy row syncs (31 tests passing).
+
+### **Nov 01, 2026 — Municipal Priority Queue API & Freshness Engine**
+- **Priority Queue Endpoint**: Added `GET /api/v1/reports/priority-queue` returning clusters ranked by priority score with stable tie-breaking.
+- **Filtering & Pagination**: Added Zod validation for status, issue type, min severity, sensitive location, and closed cluster filters.
+- **Score Freshness**: Added auto-refresh check with concurrency lock using `PRIORITY_REFRESH_MINUTES` (default 15m).
+- **Admin Protection**: Secured endpoint with `requireAuth` and `requireAdmin` for municipal staff.
+- **Test Suite**: Added `npm run test:priority-queue` covering sorting, tie-breakers, filters, and pagination (26 tests passing).

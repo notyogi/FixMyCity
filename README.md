@@ -162,3 +162,15 @@ The project is structured as a monorepo containing:
 - **Score Freshness**: Added auto-refresh check with concurrency lock using `PRIORITY_REFRESH_MINUTES` (default 15m).
 - **Admin Protection**: Secured endpoint with `requireAuth` and `requireAdmin` for municipal staff.
 - **Test Suite**: Added `npm run test:priority-queue` covering sorting, tie-breakers, filters, and pagination (26 tests passing).
+
+---
+
+## Week 6 — Municipal Web Dashboard
+
+### **Nov 04, 2026 — Dashboard Scaffold, Supabase Auth & Cloud API Integration**
+- **Dashboard Scaffold**: Initialized `/dashboard` with React 18, TypeScript, Vite, and Tailwind CSS v4.
+- **Supabase Authentication**: Built email/password login, `useAuth` hook, and `ProtectedRoute` session guard for municipal administrators.
+- **Resilient API Client**: Implemented typed `apiClient` with Bearer auth, 30s timeout, and auto-alert banner for Render cloud cold-starts.
+- **Backend CORS & Deployment**: Added configurable `CORS_ORIGINS` to Express API and verified connectivity against deployed Render backend (`https://fixmycity-fvfg.onrender.com`).
+- **Connection Check & Vercel Config**: Verified live health status and priority queue cards; added `vercel.json` SPA rewrites.
+

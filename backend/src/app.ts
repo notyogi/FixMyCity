@@ -12,7 +12,33 @@ const app: Application = express();
 
 // Security and utility middleware
 app.use(helmet());
-app.use(cors());
+
+// CORS configuration:
+// If CORS_ORIGINS is provided (comma-separated origins), restrict access to those origins.
+// In local development, if CORS_ORIGINS is unset, remain permissive (allow all origins).
+const configuredOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((origin) => origin.trim()).filter(Boolean)
+  : null;
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (such as mobile apps, curl, or server-to-server)
+      if (!origin) return callback(null, true);
+      if (!configuredOrigins || configuredOrigins.length === 0) {
+        return callback(null, true);
+      }
+      if (configuredOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error(`Origin ${origin} not allowed by CORS`));
+    },
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  })
+);
+
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

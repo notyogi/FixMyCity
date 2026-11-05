@@ -174,3 +174,11 @@ The project is structured as a monorepo containing:
 - **Backend CORS & Deployment**: Added configurable `CORS_ORIGINS` to Express API and verified connectivity against deployed Render backend (`https://fixmycity-fvfg.onrender.com`).
 - **Connection Check & Vercel Config**: Verified live health status and priority queue cards; added `vercel.json` SPA rewrites.
 
+### **Nov 05, 2026 — Interactive Leaflet Geospatial Map & Priority Visualization**
+- **Geospatial Map View**: Integrated `react-leaflet` with OpenStreetMap tiles, auto-bounds fitting, and re-centre controls.
+- **Severity-Colour System**: Plotted clusters via `CircleMarker` colored by severity (Critical: Red, High: Orange, Medium: Yellow, Low: Green).
+- **Dynamic Sizing & Risk Rings**: Scaled marker radius (10–24px) based on confirmations and added dashed purple rings for sensitive places.
+- **Priority Z-Indexing**: Layered markers so high-priority critical issues render on top of minor ones.
+- **Interactive Popups & Selection**: Added rich popups with photo thumbnails, metrics, and shared selection state driving the inspection card.
+- **Toolbar & Legend**: Built filter bar (category, min severity, status, sensitive places) with live count chips and collapsible map legend.
+

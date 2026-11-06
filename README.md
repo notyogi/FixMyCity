@@ -182,3 +182,13 @@ The project is structured as a monorepo containing:
 - **Interactive Popups & Selection**: Added rich popups with photo thumbnails, metrics, and shared selection state driving the inspection card.
 - **Toolbar & Legend**: Built filter bar (category, min severity, status, sensitive places) with live count chips and collapsible map legend.
 
+### **Nov 06, 2026 — Priority Queue Table View & TanStack Table Integration**
+- **TanStack Table Integration**: Installed `@tanstack/react-table` (v8) and built `ClusterTable.tsx` with 10 typed columns, sticky header, and photo thumbnails.
+- **Domain-Specific Sorting**: Implemented multi-tier sorting with severity hazard hierarchy (`LOW < MEDIUM < HIGH < CRITICAL`) and status workflow progression.
+- **Bi-Directional Map & Table Sync**: Unified selection across map and table with auto-pagination and smooth auto-scrolling to active rows.
+- **Shared URL-Persisted Filters**: Created `FiltersContext` syncing filters and debounced search directly with URL search params.
+- **Multi-Mode View Switcher**: Added Split, Map-only, and Table-only layout modes to `DashboardPage`.
+- **CSV Data Export**: Added client-side export utility downloading filtered clusters with full coordinates and priority metadata.
+
+
+

@@ -11,6 +11,13 @@ export const SEVERITY_ORDER: readonly Severity[] = [
   'CRITICAL',
 ] as const;
 
+export const SEVERITY_RANKS: Record<Severity, number> = {
+  LOW: 1,
+  MEDIUM: 2,
+  HIGH: 3,
+  CRITICAL: 4,
+};
+
 export const SEVERITY_COLORS: Record<Severity, string> = {
   LOW: '#22c55e',      // Green
   MEDIUM: '#eab308',   // Yellow / Amber

@@ -16,7 +16,8 @@
     "calibrate:threshold": "ts-node src/scripts/calibrateThreshold.ts",
     "recompute:priorities": "ts-node src/scripts/recomputePriorities.ts",
     "test:priority": "ts-node src/scripts/testPriorityScore.ts",
-    "test:priority-queue": "ts-node src/scripts/testPriorityQueue.ts"
+    "test:priority-queue": "ts-node src/scripts/testPriorityQueue.ts",
+    "test:cluster-endpoints": "ts-node --files src/scripts/testClusterEndpoints.ts"
   },
   "keywords": [
     "fixmycity",

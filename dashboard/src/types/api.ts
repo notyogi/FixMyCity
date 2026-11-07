@@ -60,3 +60,52 @@ export interface HealthResponse {
   status: string;
 }
 
+export interface ClusterReporter {
+  id: string;
+  name: string | null;
+}
+
+export interface ClusterReport {
+  id: string;
+  image_url: string;
+  notes: string | null;
+  lat: number;
+  lng: number;
+  issue_type: IssueType;
+  severity: Severity;
+  status: ReportStatus;
+  near_sensitive_location: boolean;
+  created_at: string;
+  reporter: ClusterReporter;
+}
+
+export interface ClusterConfirmation {
+  id: string;
+  created_at: string;
+  user: ClusterReporter;
+}
+
+export interface ClusterDetail {
+  id: string;
+  centroid_lat: number;
+  centroid_lng: number;
+  confirmation_count: number;
+  priority_score: number;
+  created_at: string;
+  updated_at: string;
+  issue_type: IssueType;
+  max_severity: Severity;
+  current_status: ReportStatus;
+  days_open: number;
+  near_sensitive_location: boolean;
+  report_count: number;
+  reports: ClusterReport[];
+  confirmations: ClusterConfirmation[];
+  updated_reports_count?: number;
+}
+
+export interface UpdateClusterStatusInput {
+  status: ReportStatus;
+}
+
+

@@ -351,7 +351,7 @@ export const ClusterTable: React.FC<ClusterTableProps> = ({ clusters, isLoading 
       }
 
       // Small timeout to allow DOM page transition before scrolling into view
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         if (selectedRowRef.current) {
           selectedRowRef.current.scrollIntoView({
             behavior: 'smooth',
@@ -359,8 +359,11 @@ export const ClusterTable: React.FC<ClusterTableProps> = ({ clusters, isLoading 
           });
         }
       }, 100);
+
+      return () => clearTimeout(timer);
     }
-  }, [selectedClusterId, pagination.pageSize, pagination.pageIndex, table]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClusterId, pagination.pageSize, pagination.pageIndex]);
 
   // Loading skeleton state
   if (isLoading) {

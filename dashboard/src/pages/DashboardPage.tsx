@@ -8,7 +8,8 @@ import { FiltersProvider, useFilters } from '../context/FiltersContext';
 import { MapFilters } from '../components/MapFilters';
 import { ClusterMap } from '../components/ClusterMap';
 import { ClusterTable } from '../components/ClusterTable';
-import { SelectedClusterCard } from '../components/SelectedClusterCard';
+import { ClusterDetailPanel } from '../components/ClusterDetailPanel';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 type ViewMode = 'split' | 'map' | 'table';
 
@@ -297,8 +298,10 @@ const DashboardContent: React.FC = () => {
         </div>
       )}
 
-      {/* Selected Cluster Detail Placeholder Card */}
-      <SelectedClusterCard />
+      {/* Interactive Cluster Detail Slide-over Drawer */}
+      <ErrorBoundary>
+        <ClusterDetailPanel />
+      </ErrorBoundary>
     </div>
   );
 };

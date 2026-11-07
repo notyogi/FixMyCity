@@ -6,7 +6,7 @@ import {
   listReportsQuerySchema,
   priorityQueueQuerySchema,
 } from '../validation/report.validation';
-import { ReportStatus } from '@prisma/client';
+import { ReportStatus, Severity, IssueType, Prisma } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
 import {
   ClusteringService,
@@ -312,3 +312,381 @@ export const getPriorityQueue = async (req: Request, res: Response): Promise<voi
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+const STATUS_PRECEDENCE: Record<ReportStatus, number> = {
+  [ReportStatus.SUBMITTED]: 1,
+  [ReportStatus.UNDER_REVIEW]: 2,
+  [ReportStatus.SCHEDULED]: 3,
+  [ReportStatus.FIXED]: 4,
+  [ReportStatus.REJECTED]: 5,
+};
+
+const SEVERITY_PRECEDENCE: Record<Severity, number> = {
+  [Severity.LOW]: 1,
+  [Severity.MEDIUM]: 2,
+  [Severity.HIGH]: 3,
+  [Severity.CRITICAL]: 4,
+};
+
+// Phase 1 status transition rules:
+// - Forward moves: SUBMITTED -> UNDER_REVIEW -> SCHEDULED -> FIXED
+// - Rejection: REJECTED is allowed from any non-closed state (SUBMITTED, UNDER_REVIEW, SCHEDULED)
+// - Re-opening: NOT allowed. If the cluster is already closed (FIXED or REJECTED), status cannot change.
+export const ALLOWED_CLUSTER_STATUS_TRANSITIONS: Record<ReportStatus, ReportStatus[]> = {
+  [ReportStatus.SUBMITTED]: [
+    ReportStatus.UNDER_REVIEW,
+    ReportStatus.SCHEDULED,
+    ReportStatus.FIXED,
+    ReportStatus.REJECTED,
+  ],
+  [ReportStatus.UNDER_REVIEW]: [
+    ReportStatus.SCHEDULED,
+    ReportStatus.FIXED,
+    ReportStatus.REJECTED,
+  ],
+  [ReportStatus.SCHEDULED]: [
+    ReportStatus.FIXED,
+    ReportStatus.REJECTED,
+  ],
+  [ReportStatus.FIXED]: [],
+  [ReportStatus.REJECTED]: [],
+};
+
+type ClusterDetailPrismaPayload = Prisma.ReportClusterGetPayload<{
+  include: {
+    reports: {
+      include: {
+        user: {
+          select: {
+            id: true;
+            name: true;
+          };
+        };
+      };
+    };
+    confirmations: {
+      include: {
+        user: {
+          select: {
+            id: true;
+            name: true;
+          };
+        };
+      };
+    };
+  };
+}>;
+
+export function buildClusterDetail(cluster: ClusterDetailPrismaPayload) {
+  const reports = cluster.reports || [];
+  const confirmations = cluster.confirmations || [];
+
+  // 1. Map reports with reporter info (no email returned for privacy)
+  const mappedReports = reports.map((r) => ({
+    id: r.id,
+    image_url: r.image_url,
+    notes: r.notes,
+    lat: r.lat,
+    lng: r.lng,
+    issue_type: r.issue_type,
+    severity: r.severity,
+    status: r.status,
+    near_sensitive_location: r.near_sensitive_location,
+    created_at: r.created_at,
+    reporter: {
+      id: r.user.id,
+      name: r.user.name,
+    },
+  }));
+
+  // 2. Map confirmations
+  const mappedConfirmations = confirmations.map((c) => ({
+    id: c.id,
+    created_at: c.created_at,
+    user: {
+      id: c.user.id,
+      name: c.user.name,
+    },
+  }));
+
+  // 3. Max Severity
+  let maxSeverity: Severity = Severity.LOW;
+  let maxSeverityRank = 0;
+  for (const r of reports) {
+    const rank = SEVERITY_PRECEDENCE[r.severity] ?? 0;
+    if (rank > maxSeverityRank) {
+      maxSeverityRank = rank;
+      maxSeverity = r.severity;
+    }
+  }
+
+  // 4. Current Status: most advanced status among active reports (order: SUBMITTED < UNDER_REVIEW < SCHEDULED)
+  const activeReports = reports.filter(
+    (r) => r.status !== ReportStatus.FIXED && r.status !== ReportStatus.REJECTED
+  );
+  let currentStatus: ReportStatus;
+  if (activeReports.length > 0) {
+    let mostAdvanced = activeReports[0].status;
+    let highestRank = STATUS_PRECEDENCE[mostAdvanced] ?? 0;
+    for (const r of activeReports) {
+      const rank = STATUS_PRECEDENCE[r.status] ?? 0;
+      if (rank > highestRank) {
+        highestRank = rank;
+        mostAdvanced = r.status;
+      }
+    }
+    currentStatus = mostAdvanced;
+  } else if (reports.length > 0) {
+    // If all reports are closed, pick the first/most advanced closed status
+    currentStatus = reports[0].status;
+  } else {
+    currentStatus = ReportStatus.SUBMITTED;
+  }
+
+  // 5. Days Open: from earliest report created_at to now
+  let daysOpen = 0;
+  if (reports.length > 0) {
+    const oldestCreatedAt = reports.reduce(
+      (earliest, r) => (r.created_at < earliest ? r.created_at : earliest),
+      reports[0].created_at
+    );
+    const diffMs = Date.now() - oldestCreatedAt.getTime();
+    daysOpen = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60 * 24)) : 0;
+  }
+
+  // 6. Issue Type: most common among its reports
+  let issueType: IssueType = IssueType.OTHER;
+  if (reports.length > 0) {
+    const countMap = new Map<IssueType, number>();
+    for (const r of reports) {
+      countMap.set(r.issue_type, (countMap.get(r.issue_type) || 0) + 1);
+    }
+    let highest = 0;
+    for (const [t, count] of countMap.entries()) {
+      if (count > highest) {
+        highest = count;
+        issueType = t;
+      }
+    }
+  }
+
+  // 7. Near Sensitive Location: true if any active report has it
+  const nearSensitiveLocation = activeReports.length > 0
+    ? activeReports.some((r) => r.near_sensitive_location)
+    : reports.some((r) => r.near_sensitive_location);
+
+  return {
+    id: cluster.id,
+    centroid_lat: cluster.centroid_lat,
+    centroid_lng: cluster.centroid_lng,
+    confirmation_count: cluster.confirmation_count,
+    priority_score: cluster.priority_score,
+    created_at: cluster.created_at,
+    updated_at: cluster.updated_at,
+    issue_type: issueType,
+    max_severity: maxSeverity,
+    current_status: currentStatus,
+    days_open: daysOpen,
+    near_sensitive_location: nearSensitiveLocation,
+    report_count: reports.length,
+    reports: mappedReports,
+    confirmations: mappedConfirmations,
+  };
+}
+
+/**
+ * 6. getClusterById(req, res)
+ * Admin-only endpoint returning complete cluster details, all associated reports (with reporter names),
+ * and confirmation records.
+ */
+export const getClusterById = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(404).json({ error: 'Cluster not found' });
+      return;
+    }
+
+    const cluster = await prisma.reportCluster.findUnique({
+      where: { id },
+      include: {
+        reports: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        confirmations: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!cluster) {
+      res.status(404).json({ error: 'Cluster not found' });
+      return;
+    }
+
+    const detail = buildClusterDetail(cluster);
+    res.status(200).json(detail);
+  } catch (error) {
+    console.error('Error in getClusterById:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * 7. updateClusterStatus(req, res)
+ * Admin-only endpoint updating the status of all active reports in a cluster.
+ * Enforces Phase 1 transition rules (forward progression or rejection, no re-opening).
+ * Recomputes cluster priority score after commit.
+ */
+export const updateClusterStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    if (!id || !UUID_REGEX.test(id)) {
+      res.status(404).json({ error: 'Cluster not found' });
+      return;
+    }
+
+    const validation = updateStatusSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: validation.error.issues,
+      });
+      return;
+    }
+
+    const targetStatus = validation.data.status;
+
+    // Fetch existing cluster with its reports to validate current state
+    const existingCluster = await prisma.reportCluster.findUnique({
+      where: { id },
+      include: {
+        reports: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        confirmations: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!existingCluster) {
+      res.status(404).json({ error: 'Cluster not found' });
+      return;
+    }
+
+    const currentDetail = buildClusterDetail(existingCluster);
+    const currentStatus = currentDetail.current_status;
+
+    // Check if cluster is already in the requested status
+    if (currentStatus === targetStatus) {
+      res.status(409).json({
+        error: `Cluster is already in ${currentStatus} status.`,
+      });
+      return;
+    }
+
+    // Phase 1 rule: Closed clusters (FIXED or REJECTED) cannot be re-opened or modified
+    if (currentStatus === ReportStatus.FIXED || currentStatus === ReportStatus.REJECTED) {
+      res.status(409).json({
+        error: `Cannot update a closed cluster (${currentStatus}). Re-opening is not permitted in Phase 1.`,
+      });
+      return;
+    }
+
+    // Phase 1 rule: Validate allowed transition (forward progression or rejection)
+    const allowedNext = ALLOWED_CLUSTER_STATUS_TRANSITIONS[currentStatus] || [];
+    if (!allowedNext.includes(targetStatus)) {
+      res.status(409).json({
+        error: `Invalid status transition from ${currentStatus} to ${targetStatus}. Only forward progression (${allowedNext.join(', ')}) is permitted.`,
+      });
+      return;
+    }
+
+    // In ONE Prisma transaction, update all active reports in the cluster
+    const updateResult = await prisma.$transaction(async (tx) => {
+      return await tx.report.updateMany({
+        where: {
+          cluster_id: id,
+          status: {
+            notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+          },
+        },
+        data: {
+          status: targetStatus,
+        },
+      });
+    });
+
+    // Recompute cluster priority score after transaction commit (non-blocking error handling)
+    try {
+      await recomputeClusterPriority(id);
+    } catch (priorityError) {
+      console.error(
+        `[updateClusterStatus] Failed to recompute priority score for cluster ${id}:`,
+        priorityError instanceof Error ? priorityError.message : priorityError
+      );
+    }
+
+    // Retrieve refreshed cluster
+    const refreshedCluster = await prisma.reportCluster.findUnique({
+      where: { id },
+      include: {
+        reports: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        confirmations: {
+          orderBy: { created_at: 'asc' },
+          include: {
+            user: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!refreshedCluster) {
+      res.status(404).json({ error: 'Cluster not found after update' });
+      return;
+    }
+
+    const refreshedDetail = buildClusterDetail(refreshedCluster);
+
+    res.status(200).json({
+      ...refreshedDetail,
+      updated_reports_count: updateResult.count,
+    });
+  } catch (error) {
+    console.error('Error in updateClusterStatus:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+

@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './hooks/useAuth';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { AppLayout } from './components/AppLayout';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { NotFoundPage } from './pages/NotFoundPage';
@@ -28,9 +29,11 @@ export const App: React.FC = () => {
               path="/"
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <DashboardPage />
-                  </AppLayout>
+                  <ErrorBoundary>
+                    <AppLayout>
+                      <DashboardPage />
+                    </AppLayout>
+                  </ErrorBoundary>
                 </ProtectedRoute>
               }
             />

@@ -105,12 +105,25 @@ const MapController: React.FC<{
 
   // Gently pan and zoom when cluster is selected
   useEffect(() => {
-    if (selectedCluster) {
-      map.flyTo(
-        [selectedCluster.centroid.lat, selectedCluster.centroid.lng],
-        Math.max(map.getZoom(), 15),
-        { duration: 0.8 }
-      );
+    if (
+      selectedCluster &&
+      selectedCluster.centroid &&
+      typeof selectedCluster.centroid.lat === 'number' &&
+      typeof selectedCluster.centroid.lng === 'number' &&
+      !isNaN(selectedCluster.centroid.lat) &&
+      !isNaN(selectedCluster.centroid.lng)
+    ) {
+      try {
+        const zoom = map.getZoom();
+        const safeZoom = typeof zoom === 'number' && !isNaN(zoom) ? zoom : 12;
+        map.flyTo(
+          [selectedCluster.centroid.lat, selectedCluster.centroid.lng],
+          Math.max(safeZoom, 15),
+          { duration: 0.8 }
+        );
+      } catch (err) {
+        console.warn('[ClusterMap] flyTo failed:', err);
+      }
     }
   }, [selectedCluster, map]);
 
@@ -200,6 +213,14 @@ export const ClusterMap: React.FC<ClusterMapProps> = ({ clusters, isLoading = fa
 
         {/* Cluster Circle Markers */}
         {sortedClusters.map((cluster) => {
+          if (
+            !cluster ||
+            !cluster.centroid ||
+            typeof cluster.centroid.lat !== 'number' ||
+            typeof cluster.centroid.lng !== 'number'
+          ) {
+            return null;
+          }
           const isSelected = selectedClusterId === cluster.cluster_id;
           const radius = getMarkerRadius(cluster.confirmation_count);
           const color = SEVERITY_COLORS[cluster.max_severity];

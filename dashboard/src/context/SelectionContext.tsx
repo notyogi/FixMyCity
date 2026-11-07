@@ -1,5 +1,8 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { QueueItem } from '../types/api';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface SelectionContextType {
   selectedClusterId: string | null;
@@ -14,15 +17,43 @@ export const SelectionProvider: React.FC<{
   children: React.ReactNode;
   clusters?: QueueItem[];
 }> = ({ children, clusters = [] }) => {
-  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // Derive the active cluster object from the current cluster collection
-  const selectedCluster =
-    clusters.find((c) => c.cluster_id === selectedClusterId) ?? null;
+  // Read selected cluster from URL query param (?cluster=<uuid>), ignoring invalid non-UUID strings
+  const paramCluster = searchParams.get('cluster');
+  const selectedClusterId = useMemo(() => {
+    return paramCluster && UUID_REGEX.test(paramCluster) ? paramCluster : null;
+  }, [paramCluster]);
 
-  const setSelectedCluster = (cluster: QueueItem | null) => {
-    setSelectedClusterId(cluster ? cluster.cluster_id : null);
-  };
+  const setSelectedClusterId = useCallback(
+    (id: string | null) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (id && UUID_REGEX.test(id)) {
+            next.set('cluster', id);
+          } else {
+            next.delete('cluster');
+          }
+          return next;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
+
+  // Derive active cluster object from current queue if present
+  const selectedCluster = useMemo(() => {
+    return clusters.find((c) => c.cluster_id === selectedClusterId) ?? null;
+  }, [clusters, selectedClusterId]);
+
+  const setSelectedCluster = useCallback(
+    (cluster: QueueItem | null) => {
+      setSelectedClusterId(cluster ? cluster.cluster_id : null);
+    },
+    [setSelectedClusterId]
+  );
 
   return (
     <SelectionContext.Provider

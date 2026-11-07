@@ -190,5 +190,13 @@ The project is structured as a monorepo containing:
 - **Multi-Mode View Switcher**: Added Split, Map-only, and Table-only layout modes to `DashboardPage`.
 - **CSV Data Export**: Added client-side export utility downloading filtered clusters with full coordinates and priority metadata.
 
+### **Nov 07, 2026 — Incident Cluster Detail View & Status Workflow**
+- **Cluster Detail API**: Added admin endpoint `GET /api/v1/reports/clusters/:id` returning derived metrics, duplicate report history, citizen reporter names (no emails), and confirmation logs.
+- **Atomic Status Workflow**: Added `PATCH /api/v1/reports/clusters/:id/status` updating all non-closed reports in one transaction with forward transition validation and terminal rejection rules.
+- **Cluster Detail Drawer**: Built `ClusterDetailPanel.tsx` slide-over view with photo lightbox, key metrics grid, citizen notes, and confirmation modals for terminal statuses.
+- **Isolated Mini-Map Preview**: Implemented standalone Leaflet preview widget with guaranteed cleanup to prevent map container collisions.
+- **Deep Linking & State Sync**: Persisted selected cluster via `?cluster=<uuid>` URL search param with keyboard navigation (Escape to close) and priority queue fallback.
+- **Automated Test Suite**: Added `npm run test:cluster-endpoints` verifying route precedence, status transitions, priority recomputations, and privacy rules (17 tests passing).
+
 
 

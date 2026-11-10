@@ -25,6 +25,8 @@ export const updateStatusSchema = z.object({
   status: z.nativeEnum(ReportStatus, {
     message: `status must be one of: ${Object.values(ReportStatus).join(', ')}`,
   }),
+  // Optional spam flag; only meaningful when status is REJECTED (defaults to true when omitted)
+  spam: z.boolean().optional(),
 });
 
 export const listReportsQuerySchema = z.object({

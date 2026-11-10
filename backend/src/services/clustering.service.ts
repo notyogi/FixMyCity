@@ -1,8 +1,9 @@
-import { Report } from '@prisma/client';
+import { Report, ReputationReason } from '@prisma/client';
 import prisma from '../utils/prisma';
 import { ProximityService, NearbyReport } from './proximity.service';
 import { hammingDistance } from '../utils/hamming';
 import { recomputeClusterPriority } from './priority.service';
+import { ReputationService } from './reputation.service';
 
 /**
  * Result indicating the outcome of evaluating a report against nearby candidates.
@@ -136,14 +137,60 @@ export class ClusteringService {
         }
 
         // 5. If a best match was found, merge into the cluster
+        let mergeMeta: {
+          matchedUserId: string;
+          originalReportId: string;
+          originalReporterId: string;
+        } | null = null;
+
         if (bestMatch) {
-          result = await this.mergeIntoCluster(report, bestMatch.candidate, bestMatch.distance);
+          const mergeOutcome = await this.mergeIntoCluster(
+            report,
+            bestMatch.candidate,
+            bestMatch.distance
+          );
+          result = mergeOutcome.result;
+          mergeMeta = mergeOutcome.mergeMeta;
         } else {
           // 6. No match found within threshold -> create a brand new cluster
           console.log(
             `[ClusteringService] No visual match found within threshold <= ${threshold} bits for report ${report.id} (${candidates.length} nearby candidate(s) checked). Creating a new cluster.`
           );
           result = await this.createNewCluster(report);
+        }
+
+        // Award reputation to the original reporter when confirmed by a different user's merge.
+        // Executed in a separate short transaction immediately after the merge commits so a
+        // failure here never rolls back the cluster assignment (non-blocking error handling).
+        if (
+          mergeMeta &&
+          mergeMeta.matchedUserId &&
+          mergeMeta.originalReporterId &&
+          report.user_id !== mergeMeta.matchedUserId &&
+          report.user_id !== mergeMeta.originalReporterId
+        ) {
+          try {
+            const applied = await prisma.$transaction((tx) =>
+              ReputationService.applyReputationEvents(tx, [
+                {
+                  userId: mergeMeta!.originalReporterId,
+                  reportId: mergeMeta!.originalReportId,
+                  reason: ReputationReason.CONFIRMED_BY_OTHER,
+                  relatedUserId: report.user_id,
+                },
+              ])
+            );
+            if (applied.length > 0) {
+              console.log(
+                `[ClusteringService] Awarded CONFIRMED_BY_OTHER to user ${mergeMeta.originalReporterId} (report ${mergeMeta.originalReportId}, confirmed by ${report.user_id})`
+              );
+            }
+          } catch (repError) {
+            console.error(
+              `[ClusteringService] Failed to apply reputation event for cluster merge ${result.clusterId}:`,
+              repError instanceof Error ? repError.message : repError
+            );
+          }
         }
       }
 
@@ -180,14 +227,37 @@ export class ClusteringService {
     report: Report,
     candidate: NearbyReport,
     matchedHammingDistance: number
-  ): Promise<ClusterAssignmentResult> {
+  ): Promise<{
+    result: ClusterAssignmentResult;
+    mergeMeta: {
+      matchedUserId: string;
+      originalReportId: string;
+      originalReporterId: string;
+    };
+  }> {
     return await prisma.$transaction(async (tx) => {
       let targetClusterId: string;
       let finalConfirmationCount: number;
+      let originalReportId = candidate.id;
+      let originalReporterId = candidate.user_id;
 
       if (candidate.cluster_id) {
         // Case A: Candidate already belongs to an existing cluster
         targetClusterId = candidate.cluster_id;
+
+        // Identify the cluster's original (earliest) report BEFORE assigning the incoming report
+        const earliestReport = await tx.report.findFirst({
+          where: {
+            cluster_id: targetClusterId,
+            id: { not: report.id },
+          },
+          orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+          select: { id: true, user_id: true },
+        });
+        if (earliestReport) {
+          originalReportId = earliestReport.id;
+          originalReporterId = earliestReport.user_id;
+        }
 
         // Assign this report to the existing cluster
         await tx.report.update({
@@ -306,12 +376,19 @@ export class ClusteringService {
       );
 
       return {
-        action: 'merged',
-        clusterId: targetClusterId,
-        matchedReportId: candidate.id,
-        hammingDistance: matchedHammingDistance,
-        distanceMeters: candidate.distance_meters,
-        confirmationCount: finalConfirmationCount,
+        result: {
+          action: 'merged',
+          clusterId: targetClusterId,
+          matchedReportId: candidate.id,
+          hammingDistance: matchedHammingDistance,
+          distanceMeters: candidate.distance_meters,
+          confirmationCount: finalConfirmationCount,
+        },
+        mergeMeta: {
+          matchedUserId: candidate.user_id,
+          originalReportId,
+          originalReporterId,
+        },
       };
     });
   }

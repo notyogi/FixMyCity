@@ -131,6 +131,7 @@ export const ClusterDetailPanel: React.FC = () => {
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<ReportStatus | ''>('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [markAsSpam, setMarkAsSpam] = useState(true);
   const [copiedCoords, setCopiedCoords] = useState(false);
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [showAllReports, setShowAllReports] = useState(false);
@@ -179,12 +180,17 @@ export const ClusterDetailPanel: React.FC = () => {
     };
   }, [fetchedCluster, selectedCluster]);
 
+  // Clear toast when switching selected clusters
+  useEffect(() => {
+    setSuccessToast(null);
+  }, [selectedClusterId]);
+
   // Reset local state when cluster changes
   useEffect(() => {
     if (cluster) {
       setSelectedStatus(cluster.current_status);
       setShowConfirmModal(false);
-      setSuccessToast(null);
+      setMarkAsSpam(true);
 
       // Default active photo to representative report (highest severity, earliest)
       const sorted = [...(cluster.reports || [])].sort((a, b) => {
@@ -260,20 +266,27 @@ export const ClusterDetailPanel: React.FC = () => {
   };
 
   // Submit status update
-  const handleExecuteStatusUpdate = async (statusToSet: ReportStatus) => {
+  const handleExecuteStatusUpdate = async (statusToSet: ReportStatus, spamFlag?: boolean) => {
     if (!cluster) return;
     setShowConfirmModal(false);
 
     try {
-      await updateMutation.mutateAsync({
+      const updated = await updateMutation.mutateAsync({
         clusterId: cluster.id,
         status: statusToSet,
+        ...(statusToSet === 'REJECTED' ? { spam: spamFlag ?? true } : {}),
       });
 
+      const repChanges = updated?.reputation_changes;
+      const repNote =
+        typeof repChanges === 'number'
+          ? ` (${repChanges} ${repChanges === 1 ? "reporter's reputation" : "reporters' reputations"} changed)`
+          : '';
+
       setSuccessToast(
-        `Cluster status successfully updated to ${STATUS_LABELS[statusToSet] || statusToSet}.`
+        `Cluster status successfully updated to ${STATUS_LABELS[statusToSet] || statusToSet}.${repNote}`
       );
-      setTimeout(() => setSuccessToast(null), 4000);
+      setTimeout(() => setSuccessToast(null), 5000);
     } catch {
       // Revert dropdown to previous status
       setSelectedStatus(cluster.current_status);
@@ -285,6 +298,7 @@ export const ClusterDetailPanel: React.FC = () => {
 
     // Show confirmation dialog for terminal statuses (FIXED / REJECTED)
     if (selectedStatus === 'FIXED' || selectedStatus === 'REJECTED') {
+      setMarkAsSpam(true);
       setShowConfirmModal(true);
     } else {
       handleExecuteStatusUpdate(selectedStatus);
@@ -833,6 +847,20 @@ export const ClusterDetailPanel: React.FC = () => {
               Closed clusters cannot be re-opened and will have their priority score set to 0.
             </p>
 
+            {selectedStatus === 'REJECTED' && (
+              <label className="flex items-start space-x-2.5 bg-red-50/70 border border-red-200 rounded-lg p-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={markAsSpam}
+                  onChange={(e) => setMarkAsSpam(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 accent-red-600 border-gray-300 rounded focus:ring-red-500 cursor-pointer"
+                />
+                <span className="text-xs text-red-900 font-medium leading-snug">
+                  Mark as spam / invalid (reduces the reporter&apos;s reputation)
+                </span>
+              </label>
+            )}
+
             <div className="flex items-center justify-end space-x-2 pt-2 border-t border-gray-100">
               <button
                 type="button"
@@ -847,7 +875,12 @@ export const ClusterDetailPanel: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => handleExecuteStatusUpdate(selectedStatus)}
+                onClick={() =>
+                  handleExecuteStatusUpdate(
+                    selectedStatus,
+                    selectedStatus === 'REJECTED' ? markAsSpam : undefined
+                  )
+                }
                 className={`px-3.5 py-1.5 text-white rounded-lg text-xs font-semibold cursor-pointer ${
                   selectedStatus === 'REJECTED'
                     ? 'bg-red-600 hover:bg-red-700'

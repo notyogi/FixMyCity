@@ -6,7 +6,7 @@ import {
   listReportsQuerySchema,
   priorityQueueQuerySchema,
 } from '../validation/report.validation';
-import { ReportStatus, Severity, IssueType, Prisma } from '@prisma/client';
+import { ReportStatus, Severity, IssueType, Prisma, ReputationReason, ReputationEvent } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
 import {
   ClusteringService,
@@ -15,8 +15,173 @@ import {
 } from '../services/clustering.service';
 import { recomputeClusterPriority } from '../services/priority.service';
 import { PriorityQueueService } from '../services/priorityQueue.service';
+import { ReputationService, ReputationEventInput } from '../services/reputation.service';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export type ApplyReputationFn = (
+  tx: Prisma.TransactionClient,
+  events: ReputationEventInput[]
+) => Promise<ReputationEvent[]>;
+
+export function buildStatusChangeReputationEvents(
+  changedReports: Array<{ id: string; user_id: string }>,
+  targetStatus: ReportStatus,
+  spam?: boolean
+): ReputationEventInput[] {
+  if (changedReports.length === 0) {
+    return [];
+  }
+
+  if (targetStatus === ReportStatus.FIXED) {
+    return changedReports.map((r) => ({
+      userId: r.user_id,
+      reportId: r.id,
+      reason: ReputationReason.REPORT_FIXED,
+    }));
+  }
+
+  if (targetStatus === ReportStatus.REJECTED) {
+    // Default to spam=true when omitted so existing clients preserve spam penalty behavior
+    const isSpam = spam !== undefined ? spam : true;
+    if (!isSpam) {
+      return [];
+    }
+
+    return changedReports.map((r) => ({
+      userId: r.user_id,
+      reportId: r.id,
+      reason: ReputationReason.REPORT_REJECTED_SPAM,
+    }));
+  }
+
+  return [];
+}
+
+/**
+ * TRANSACTION DESIGN CHOICE (Two Sequential Short Transactions):
+ * In PostgreSQL, if a SQL statement inside `prisma.$transaction` throws (even when caught
+ * in JS), Postgres puts that transaction in an aborted state (`25P02`) and prevents committing
+ * the surrounding status update unless explicit SAVEPOINTs are managed.
+ *
+ * To guarantee that:
+ *   1) All reputation_events inserts + user reputation_score increments commit or roll back atomically together, AND
+ *   2) A failure in reputation processing NEVER rolls back or blocks the report status change,
+ * we commit the status update atomically in Transaction 1 (using `updateManyAndReturn` with row locks so
+ * already-closed reports and losing concurrent requests are never double-counted), and then immediately
+ * run `applyReputationEvents` in Transaction 2 wrapped in try/catch. Any missed events on failure remain
+ * idempotently recoverable via backfill or retry thanks to unique `dedupe_key`.
+ */
+export async function performSingleReportStatusUpdate(params: {
+  reportId: string;
+  targetStatus: ReportStatus;
+  spam?: boolean;
+  applyReputationFn?: ApplyReputationFn;
+}): Promise<{
+  changedReports: Array<{ id: string; user_id: string }>;
+  reputationChanges: number;
+}> {
+  const {
+    reportId,
+    targetStatus,
+    spam,
+    applyReputationFn = ReputationService.applyReputationEvents,
+  } = params;
+
+  const changedReports = await prisma.$transaction(async (tx) => {
+    return tx.report.updateManyAndReturn({
+      where: {
+        id: reportId,
+        status: {
+          notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+          not: targetStatus,
+        },
+      },
+      data: { status: targetStatus },
+      select: { id: true, user_id: true },
+    });
+  });
+
+  const reputationEvents = buildStatusChangeReputationEvents(changedReports, targetStatus, spam);
+  let reputationChanges = 0;
+
+  if (reputationEvents.length > 0) {
+    try {
+      const applied = await prisma.$transaction((tx) =>
+        applyReputationFn(tx, reputationEvents)
+      );
+      reputationChanges = new Set(
+        applied.filter((e) => e.delta !== 0).map((e) => e.user_id)
+      ).size;
+    } catch (repError) {
+      console.error(
+        `[updateReportStatus] Reputation update failed for report ${reportId} (status update was committed):`,
+        repError instanceof Error ? repError.message : repError
+      );
+    }
+  }
+
+  return { changedReports, reputationChanges };
+}
+
+export async function performClusterStatusUpdate(params: {
+  clusterId: string;
+  targetStatus: ReportStatus;
+  spam?: boolean;
+  applyReputationFn?: ApplyReputationFn;
+}): Promise<{
+  changedReports: Array<{ id: string; user_id: string }>;
+  reputationChanges: number;
+}> {
+  const {
+    clusterId,
+    targetStatus,
+    spam,
+    applyReputationFn = ReputationService.applyReputationEvents,
+  } = params;
+
+  // Transaction 1: Atomically transition only active (non-closed) reports in the cluster
+  const changedReports = await prisma.$transaction(async (tx) => {
+    return tx.report.updateManyAndReturn({
+      where: {
+        cluster_id: clusterId,
+        status: {
+          notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+        },
+      },
+      data: {
+        status: targetStatus,
+      },
+      select: {
+        id: true,
+        user_id: true,
+      },
+    });
+  });
+
+  // Transaction 2: Apply reputation events atomically inside a short transaction right after commit.
+  // Wrapped so a reputation error is logged and never fails or rolls back the committed status update.
+  const reputationEvents = buildStatusChangeReputationEvents(changedReports, targetStatus, spam);
+  let reputationChanges = 0;
+
+  if (reputationEvents.length > 0) {
+    try {
+      const applied = await prisma.$transaction((tx) =>
+        applyReputationFn(tx, reputationEvents)
+      );
+      reputationChanges = new Set(
+        applied.filter((e) => e.delta !== 0).map((e) => e.user_id)
+      ).size;
+    } catch (repError) {
+      console.error(
+        `[updateClusterStatus] Reputation update failed for cluster ${clusterId} (status update was committed):`,
+        repError instanceof Error ? repError.message : repError
+      );
+    }
+  }
+
+  return { changedReports, reputationChanges };
+}
 
 /**
  * 1. createReport(req, res)
@@ -259,12 +424,20 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const updatedReport = await prisma.report.update({
-      where: { id },
-      data: {
-        status: validation.data.status,
-      },
+    const { reputationChanges } = await performSingleReportStatusUpdate({
+      reportId: id,
+      targetStatus: validation.data.status,
+      spam: validation.data.spam,
     });
+
+    const updatedReport = await prisma.report.findUnique({
+      where: { id },
+    });
+
+    if (!updatedReport) {
+      res.status(404).json({ error: 'Report not found' });
+      return;
+    }
 
     // Recompute cluster priority score if the report is assigned to a cluster
     // Availability over completeness: Non-blocking error handling
@@ -279,7 +452,10 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
       }
     }
 
-    res.status(200).json(updatedReport);
+    res.status(200).json({
+      ...updatedReport,
+      reputation_changes: reputationChanges,
+    });
   } catch (error) {
     console.error('Error in updateReportStatus:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -625,19 +801,11 @@ export const updateClusterStatus = async (req: Request, res: Response): Promise<
       return;
     }
 
-    // In ONE Prisma transaction, update all active reports in the cluster
-    const updateResult = await prisma.$transaction(async (tx) => {
-      return await tx.report.updateMany({
-        where: {
-          cluster_id: id,
-          status: {
-            notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
-          },
-        },
-        data: {
-          status: targetStatus,
-        },
-      });
+    // Atomically transition all non-closed reports in the cluster and apply reputation events
+    const { changedReports, reputationChanges } = await performClusterStatusUpdate({
+      clusterId: id,
+      targetStatus,
+      spam: validation.data.spam,
     });
 
     // Recompute cluster priority score after transaction commit (non-blocking error handling)
@@ -682,7 +850,8 @@ export const updateClusterStatus = async (req: Request, res: Response): Promise<
 
     res.status(200).json({
       ...refreshedDetail,
-      updated_reports_count: updateResult.count,
+      updated_reports_count: changedReports.length,
+      reputation_changes: reputationChanges,
     });
   } catch (error) {
     console.error('Error in updateClusterStatus:', error);

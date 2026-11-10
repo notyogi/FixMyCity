@@ -5,6 +5,7 @@ import { ClusterDetail, ReportStatus, UpdateClusterStatusInput } from '../types/
 export interface UpdateClusterStatusVariables {
   clusterId: string;
   status: ReportStatus;
+  spam?: boolean;
 }
 
 /**
@@ -19,10 +20,14 @@ export function useUpdateClusterStatus() {
   const queryClient = useQueryClient();
 
   return useMutation<ClusterDetail, Error, UpdateClusterStatusVariables>({
-    mutationFn: async ({ clusterId, status }) => {
+    mutationFn: async ({ clusterId, status, spam }) => {
+      const payload: UpdateClusterStatusInput = {
+        status,
+        ...(spam !== undefined ? { spam } : {}),
+      };
       return apiClient<ClusterDetail>(`/reports/clusters/${clusterId}/status`, {
         method: 'PATCH',
-        body: JSON.stringify({ status } as UpdateClusterStatusInput),
+        body: JSON.stringify(payload),
       });
     },
     onSuccess: (updatedCluster, variables) => {

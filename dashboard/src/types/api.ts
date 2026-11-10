@@ -102,10 +102,12 @@ export interface ClusterDetail {
   reports: ClusterReport[];
   confirmations: ClusterConfirmation[];
   updated_reports_count?: number;
+  reputation_changes?: number;
 }
 
 export interface UpdateClusterStatusInput {
   status: ReportStatus;
+  spam?: boolean;
 }
 
 

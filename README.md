@@ -198,5 +198,16 @@ The project is structured as a monorepo containing:
 - **Deep Linking & State Sync**: Persisted selected cluster via `?cluster=<uuid>` URL search param with keyboard navigation (Escape to close) and priority queue fallback.
 - **Automated Test Suite**: Added `npm run test:cluster-endpoints` verifying route precedence, status transitions, priority recomputations, and privacy rules (17 tests passing).
 
+---
+
+## Week 7 — Reputation & Anti-Spam
+
+### **Nov 10, 2026 — Citizen Reputation System**
+- **Reputation Schema & Audit Log**: Added `ReputationEvent` model (`reputation_events`), `ReputationReason` enum, and unique `dedupe_key` migration (`add_reputation_events`).
+- **Scoring & Idempotency Engine**: Built `ReputationService` and `reputation.config.ts` enforcing `+1` (`REPORT_FIXED`), `+1` (`CONFIRMED_BY_OTHER`), `-1` (`REPORT_REJECTED_SPAM`), trust tiers, and concurrency-safe deduplication.
+- **Lifecycle Hooks**: Integrated non-blocking reputation updates into status transitions (`FIXED` / `REJECTED` with optional `spam` flag) and duplicate cluster merges (blocking self-confirmation).
+- **Reputation APIs & Dashboard Control**: Added `GET /api/v1/users/me/reputation` and `GET /api/v1/users/:id/reputation`, plus a default-checked spam toggle and reputation count toast in `ClusterDetailPanel.tsx`.
+- **Backfill & Test Suite**: Executed `npm run backfill:reputation` on Supabase and added `npm run test:reputation` (17 tests passing).
+
 
 

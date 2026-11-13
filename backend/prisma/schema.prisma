@@ -78,6 +78,7 @@ model Report {
   @@index([status])
   @@index([cluster_id])
   @@index([created_at])
+  @@index([user_id, created_at])
   @@index([lat, lng])
   @@map("reports")
 }

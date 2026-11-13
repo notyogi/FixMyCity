@@ -31,6 +31,20 @@ class ReportSubmissionException implements Exception {
   String toString() => message;
 }
 
+/// Thrown when the user has exceeded their hourly reporting quota (HTTP 429).
+class RateLimitedException implements Exception {
+  final String message;
+  final int retryAfterSeconds;
+
+  const RateLimitedException({
+    required this.message,
+    required this.retryAfterSeconds,
+  });
+
+  @override
+  String toString() => message;
+}
+
 /// Service for calling the FixMyCity Express backend API.
 class ApiService {
   final String? baseUrl;
@@ -169,6 +183,38 @@ class ApiService {
         );
       }
 
+      if (response.statusCode == 429) {
+        // Read Retry-After header first, falling back to JSON body retry_after_seconds
+        int retryAfter = 3600;
+        final retryAfterHeader = response.headers['retry-after'];
+        if (retryAfterHeader != null) {
+          final parsed = int.tryParse(retryAfterHeader.trim());
+          if (parsed != null && parsed > 0) {
+            retryAfter = parsed;
+          }
+        }
+
+        String message = 'Report limit reached. Please try again later.';
+        try {
+          final dynamic body = jsonDecode(response.body);
+          if (body is Map<String, dynamic>) {
+            if (retryAfterHeader == null && body['retry_after_seconds'] is int) {
+              retryAfter = body['retry_after_seconds'] as int;
+            }
+            if (body['error'] != null) {
+              message = body['error'].toString();
+            } else if (body['message'] != null) {
+              message = body['message'].toString();
+            }
+          }
+        } catch (_) {}
+
+        throw RateLimitedException(
+          message: message,
+          retryAfterSeconds: retryAfter,
+        );
+      }
+
       if (response.statusCode == 400) {
         String validationSummary = 'Validation failed';
         try {
@@ -215,6 +261,8 @@ class ApiService {
       } catch (_) {}
       throw ReportSubmissionException(errorMessage);
     } on NotAuthenticatedException {
+      rethrow;
+    } on RateLimitedException {
       rethrow;
     } on ReportSubmissionException {
       rethrow;

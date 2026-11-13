@@ -537,5 +537,99 @@ void main() {
       // Persistent photo file must NOT be deleted so retry remains possible
       expect(persistedPhoto.existsSync(), isTrue);
     });
+
+    test('429 during sync keeps the item pending with unchanged retry_count and stops the pass', () async {
+      final tempDir = Directory.systemTemp.createTempSync('sync_ratelimit_test_');
+      final persistedPhoto1 = File('${tempDir.path}/report1.jpg')..writeAsStringSync('dummy photo 1');
+      final persistedPhoto2 = File('${tempDir.path}/report2.jpg')..writeAsStringSync('dummy photo 2');
+      addTearDown(() {
+        if (tempDir.existsSync()) {
+          tempDir.deleteSync(recursive: true);
+        }
+      });
+
+      final fakeDb = FakeSQLiteHelper();
+      fakeDb.storage.add(
+        PendingReport(
+          id: 'report-ratelimit-1',
+          imageFilePath: persistedPhoto1.path,
+          latitude: 28.5,
+          longitude: 77.1,
+          issueType: 'POTHOLE',
+          severity: 'HIGH',
+          createdAt: '2026-11-13T10:00:00Z',
+          syncStatus: 'pending',
+          retryCount: 0,
+        ),
+      );
+      fakeDb.storage.add(
+        PendingReport(
+          id: 'report-ratelimit-2',
+          imageFilePath: persistedPhoto2.path,
+          latitude: 28.6,
+          longitude: 77.2,
+          issueType: 'GARBAGE',
+          severity: 'LOW',
+          createdAt: '2026-11-13T10:05:00Z',
+          syncStatus: 'pending',
+          retryCount: 0,
+        ),
+      );
+
+      final fakeCloudinary = FakeCloudinaryService();
+
+      // Mock API client returning HTTP 429
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': 'Report limit reached',
+            'limit': 10,
+            'window': '1 hour',
+            'retry_after_seconds': 120,
+            'code': 'RATE_LIMITED',
+          }),
+          429,
+          headers: {
+            'content-type': 'application/json',
+            'retry-after': '120',
+          },
+        );
+      });
+
+      final syncService = SyncService(
+        sqliteHelper: fakeDb,
+        cloudinaryService: fakeCloudinary,
+        apiService: ApiService(baseUrl: 'http://localhost:5001', client: mockClient),
+        connectivityService: FakeOfflineConnectivityService(online: true),
+        authToken: 'test-token',
+      );
+      addTearDown(() {
+        syncService.cancelRateLimitTimer();
+      });
+
+      await syncService.syncPendingReports();
+
+      // Both items must still exist in DB
+      expect(fakeDb.storage.length, 2);
+
+      // Report 1: kept in 'pending' status with retryCount = 0 (unchanged)
+      final item1 = fakeDb.storage.firstWhere((r) => r.id == 'report-ratelimit-1');
+      expect(item1.syncStatus, 'pending');
+      expect(item1.retryCount, 0);
+      expect(item1.lastError, contains('Report limit reached'));
+
+      // Report 2: pass stopped immediately, never attempted
+      final item2 = fakeDb.storage.firstWhere((r) => r.id == 'report-ratelimit-2');
+      expect(item2.syncStatus, 'pending');
+      expect(item2.retryCount, 0);
+      expect(item2.lastError, isNull);
+
+      // Retry timer was scheduled
+      expect(syncService.rateLimitTimer, isNotNull);
+
+      // Files still exist
+      expect(persistedPhoto1.existsSync(), isTrue);
+      expect(persistedPhoto2.existsSync(), isTrue);
+    });
   });
 }

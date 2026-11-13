@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -35,12 +36,33 @@ class SyncService {
   String? _authToken;
 
   bool _isSyncing = false;
+  Timer? _rateLimitTimer;
 
   /// Whether a sync batch is currently in progress.
   bool get isSyncing => _isSyncing;
 
+  /// Returns the active rate-limit retry timer, if any.
+  Timer? get rateLimitTimer => _rateLimitTimer;
+
   /// Notifier for listening to sync activity across UI components.
   final ValueNotifier<bool> isSyncingNotifier = ValueNotifier<bool>(false);
+
+  /// Schedules next automatic sync attempt after rate limit expires (capped at 15 minutes = 900s).
+  void _scheduleRateLimitRetry(int retryAfterSeconds) {
+    _rateLimitTimer?.cancel();
+    final waitSeconds = retryAfterSeconds.clamp(1, 900);
+    debugPrint('SyncService: Scheduling next sync retry after ${waitSeconds}s due to rate limit');
+    _rateLimitTimer = Timer(Duration(seconds: waitSeconds), () {
+      debugPrint('SyncService: Rate limit timer elapsed. Triggering automatic sync pass...');
+      syncPendingReports();
+    });
+  }
+
+  /// Cancels any active rate-limit retry timer.
+  void cancelRateLimitTimer() {
+    _rateLimitTimer?.cancel();
+    _rateLimitTimer = null;
+  }
 
   /// Synchronizes all eligible pending reports sequentially.
   ///
@@ -75,7 +97,12 @@ class SyncService {
       debugPrint('SyncService: Starting sync of ${reports.length} pending report(s)...');
 
       for (final report in reports) {
-        await _syncItem(report);
+        try {
+          await _syncItem(report);
+        } on RateLimitedException {
+          debugPrint('SyncService: Aborting remaining sync queue items in this pass due to rate limit.');
+          break; // Stop current pass immediately!
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('SyncService: Error during batch sync: $e\n$stackTrace');
@@ -96,7 +123,11 @@ class SyncService {
       return false;
     }
 
-    return await _syncItem(report);
+    try {
+      return await _syncItem(report);
+    } on RateLimitedException {
+      return false;
+    }
   }
 
   /// Synchronizes a single report item. Returns true if successful.
@@ -148,6 +179,18 @@ class SyncService {
       }
 
       return true;
+    } on RateLimitedException catch (e) {
+      debugPrint(
+        'SyncService: Rate limited on report ${report.id}: ${e.message} (retry in ${e.retryAfterSeconds}s)',
+      );
+      // Revert status to 'pending' (do NOT increment retryCount, this is not a permanent failure)
+      await _sqliteHelper.updateReportStatus(
+        report.id,
+        'pending',
+        error: e.message,
+      );
+      _scheduleRateLimitRetry(e.retryAfterSeconds);
+      rethrow;
     } catch (e) {
       final errorMsg = e is ImageUploadException
           ? e.message

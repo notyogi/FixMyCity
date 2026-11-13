@@ -16,6 +16,7 @@ import {
 import { recomputeClusterPriority } from '../services/priority.service';
 import { PriorityQueueService } from '../services/priorityQueue.service';
 import { ReputationService, ReputationEventInput } from '../services/reputation.service';
+import { calculateUserRateLimitStatus } from '../middleware/reportRateLimit.middleware';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -858,4 +859,31 @@ export const updateClusterStatus = async (req: Request, res: Response): Promise<
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+/**
+ * 8. getReportRateLimitStatus(req, res)
+ * Protected by requireAuth.
+ * Returns the current citizen's rolling 1-hour report rate limit quota:
+ * { limit, used, remaining, reset_at }
+ */
+export const getReportRateLimitStatus = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user || !req.user.id) {
+      res.status(401).json({ error: 'Unauthorized: User identity not found' });
+      return;
+    }
+
+    const status = await calculateUserRateLimitStatus(req.user.id);
+    res.status(200).json({
+      limit: status.limit,
+      used: status.used,
+      remaining: status.remaining,
+      reset_at: status.reset_at,
+    });
+  } catch (error) {
+    console.error('Error in getReportRateLimitStatus:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 

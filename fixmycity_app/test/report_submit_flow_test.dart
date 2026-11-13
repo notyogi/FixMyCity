@@ -1,15 +1,60 @@
 import 'dart:convert';
+import 'dart:io';
 
+import 'package:fixmycity_app/db/sqlite_helper.dart';
+import 'package:fixmycity_app/models/pending_report_model.dart';
 import 'package:fixmycity_app/models/report_model.dart';
 import 'package:fixmycity_app/providers/new_report_provider.dart';
 import 'package:fixmycity_app/services/api_service.dart';
 import 'package:fixmycity_app/services/cloudinary_service.dart';
 import 'package:fixmycity_app/services/connectivity_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+
+class FakeSQLiteHelper extends SQLiteHelper {
+  final List<PendingReport> storage = [];
+
+  FakeSQLiteHelper() : super.internal();
+
+  @override
+  Future<void> insertPendingReport(PendingReport report) async {
+    storage.add(report);
+  }
+
+  @override
+  Future<List<PendingReport>> getAllPendingReports({bool autoRetryableOnly = false}) async {
+    return List.from(storage);
+  }
+
+  @override
+  Future<PendingReport?> getPendingReportById(String id) async {
+    try {
+      return storage.firstWhere((r) => r.id == id);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<void> deletePendingReport(String id) async {
+    storage.removeWhere((r) => r.id == id);
+  }
+
+  @override
+  Future<void> updateReportStatus(String id, String status, {String? error}) async {
+    final idx = storage.indexWhere((r) => r.id == id);
+    if (idx != -1) {
+      storage[idx] = storage[idx].copyWith(syncStatus: status, lastError: error);
+    }
+  }
+
+  @override
+  Future<int> getPendingReportsCount() async => storage.length;
+}
 
 class FakeOnlineConnectivityService extends ConnectivityService {
   @override
@@ -38,6 +83,26 @@ class FakeCloudinaryService extends CloudinaryService {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late Directory mockDocsDir;
+
+  setUpAll(() {
+    mockDocsDir = Directory.systemTemp.createTempSync('mock_submit_docs_');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (MethodCall methodCall) async {
+        return mockDocsDir.path;
+      },
+    );
+  });
+
+  tearDownAll(() {
+    if (mockDocsDir.existsSync()) {
+      mockDocsDir.deleteSync(recursive: true);
+    }
+  });
+
   setUp(() {
     dotenv.loadFromString(
       envString: 'BACKEND_API_URL=http://localhost:5001\n'
@@ -250,6 +315,82 @@ void main() {
         throwsA(isA<NotAuthenticatedException>()),
       );
     });
+
+    test('429 response throws RateLimitedException with retry_after_seconds from Retry-After header', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': 'Report limit reached',
+            'limit': 10,
+            'window': '1 hour',
+            'retry_after_seconds': 450,
+            'code': 'RATE_LIMITED',
+          }),
+          429,
+          headers: {
+            'content-type': 'application/json',
+            'retry-after': '450',
+          },
+        );
+      });
+
+      final apiService = ApiService(
+        baseUrl: 'http://localhost:5001',
+        client: mockClient,
+      );
+
+      expect(
+        () => apiService.submitReport(
+          imageUrl: 'https://example.com/photo.jpg',
+          lat: 28.6139,
+          lng: 77.2090,
+          issueType: 'POTHOLE',
+          severity: 'CRITICAL',
+          authToken: 'mock-jwt-token',
+        ),
+        throwsA(
+          isA<RateLimitedException>()
+              .having((e) => e.retryAfterSeconds, 'retryAfterSeconds', 450)
+              .having((e) => e.message, 'message', contains('Report limit reached')),
+        ),
+      );
+    });
+
+    test('429 response falls back to JSON body retry_after_seconds when header missing', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': 'Report limit reached',
+            'limit': 3,
+            'window': '1 hour',
+            'retry_after_seconds': 720,
+            'code': 'RATE_LIMITED',
+          }),
+          429,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final apiService = ApiService(
+        baseUrl: 'http://localhost:5001',
+        client: mockClient,
+      );
+
+      expect(
+        () => apiService.submitReport(
+          imageUrl: 'https://example.com/photo.jpg',
+          lat: 28.6139,
+          lng: 77.2090,
+          issueType: 'POTHOLE',
+          severity: 'CRITICAL',
+          authToken: 'mock-jwt-token',
+        ),
+        throwsA(
+          isA<RateLimitedException>()
+              .having((e) => e.retryAfterSeconds, 'retryAfterSeconds', 720),
+        ),
+      );
+    });
   });
 
   group('NewReportNotifier.submitReport orchestration', () {
@@ -418,6 +559,81 @@ void main() {
       final state = container.read(newReportProvider);
       expect(state.imageFilePath, '/fake/image.jpg');
       expect(state.issueType, IssueType.STREETLIGHT);
+    });
+
+    test('429 on online submit offers to queue: saving to offline queue preserves details as pending with retryCount 0', () async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      final tempDir = Directory.systemTemp.createTempSync('online_429_test_');
+      final tempPhoto = File('${tempDir.path}/temp_draft.jpg')..writeAsStringSync('sample photo');
+      addTearDown(() {
+        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+      });
+
+      final notifier = container.read(newReportProvider.notifier);
+      notifier.setImagePath(tempPhoto.path);
+      notifier.setLocation(28.6139, 77.2090);
+      notifier.setTags(
+        issueType: IssueType.DRAINAGE,
+        severity: Severity.MEDIUM,
+        notes: 'overflowing drain',
+        nearSensitiveLocation: true,
+      );
+
+      final fakeCloudinary = FakeCloudinaryService();
+      final mock429Client = MockClient((request) async {
+        return http.Response(
+          jsonEncode({
+            'error': 'Report limit reached',
+            'limit': 10,
+            'window': '1 hour',
+            'retry_after_seconds': 600,
+            'code': 'RATE_LIMITED',
+          }),
+          429,
+          headers: {'retry-after': '600', 'content-type': 'application/json'},
+        );
+      });
+
+      final apiService429 = ApiService(
+        baseUrl: 'http://localhost:5001',
+        client: mock429Client,
+      );
+
+      // Attempt online submit -> throws RateLimitedException
+      await expectLater(
+        () => notifier.submitReport(
+          cloudinaryService: fakeCloudinary,
+          apiService: apiService429,
+          connectivityService: FakeOnlineConnectivityService(),
+          authToken: 'mock-token',
+        ),
+        throwsA(isA<RateLimitedException>()),
+      );
+
+      // Verify draft state was NOT wiped when rate-limited
+      final stateBeforeQueue = container.read(newReportProvider);
+      expect(stateBeforeQueue.imageFilePath, tempPhoto.path);
+      expect(stateBeforeQueue.issueType, IssueType.DRAINAGE);
+
+      // Now invoke offer-to-queue helper (queueCurrentReportOffline)
+      final fakeDb = FakeSQLiteHelper();
+      await notifier.queueCurrentReportOffline(sqliteHelper: fakeDb);
+
+      // State is now reset
+      final stateAfterQueue = container.read(newReportProvider);
+      expect(stateAfterQueue.hasPhoto, isFalse);
+
+      // Offline queue has the saved report in 'pending' status with retryCount 0
+      expect(fakeDb.storage.length, 1);
+      final queued = fakeDb.storage.first;
+      expect(queued.syncStatus, 'pending');
+      expect(queued.retryCount, 0);
+      expect(queued.issueType, 'DRAINAGE');
+      expect(queued.severity, 'MEDIUM');
+      expect(queued.notes, 'overflowing drain');
+      expect(queued.nearSensitiveLocation, isTrue);
     });
   });
 }

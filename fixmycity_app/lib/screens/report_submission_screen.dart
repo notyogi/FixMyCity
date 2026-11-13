@@ -326,6 +326,56 @@ class _ReportSubmissionScreenState extends ConsumerState<ReportSubmissionScreen>
         MaterialPageRoute(builder: (_) => const LoginScreen()),
         (route) => false,
       );
+    } on RateLimitedException catch (e) {
+      if (!mounted) return;
+      final minutes = (e.retryAfterSeconds / 60).ceil();
+      final waitText = minutes <= 1 ? '1 minute' : '$minutes minutes';
+      final alertMsg = "You've reached the hourly limit of 10 reports. Try again in about $waitText.";
+
+      setState(() => _submitError = alertMsg);
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.timer_outlined, color: Colors.amber, size: 40),
+          title: const Text('Hourly Limit Reached'),
+          content: Text(
+            "$alertMsg\n\nWould you like to save your report to the offline queue so your photo and tags aren't lost? It will sync automatically once your limit resets.",
+            style: const TextStyle(fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Keep Editing'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  await ref.read(newReportProvider.notifier).queueCurrentReportOffline();
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: const Text(
+                        'Report saved to offline queue! It will sync automatically when your limit resets.',
+                      ),
+                      backgroundColor: Colors.amber.shade800,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 4),
+                    ),
+                  );
+                  Navigator.of(context).pop();
+                } catch (queueErr) {
+                  _showSnackBar('Failed to queue offline: $queueErr', isError: true);
+                }
+              },
+              icon: const Icon(Icons.save_alt_rounded, size: 18),
+              label: const Text('Save to Offline Queue'),
+            ),
+          ],
+        ),
+      );
     } on ImageUploadException catch (e) {
       if (mounted) {
         setState(() => _submitError = e.message);

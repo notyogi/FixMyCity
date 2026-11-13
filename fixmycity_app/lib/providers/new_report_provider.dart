@@ -240,6 +240,54 @@ class NewReportNotifier extends Notifier<NewReportState> {
     reset();
     return SubmitResult.sentOnline;
   }
+
+  /// Explicitly queues the current draft report to the local SQLite offline queue.
+  /// Used when an online submission is rate limited (HTTP 429) so the citizen does not
+  /// lose their captured photo, coordinates, tags, and notes.
+  Future<void> queueCurrentReportOffline({SQLiteHelper? sqliteHelper}) async {
+    final imagePath = state.imageFilePath;
+    final lat = state.latitude;
+    final lng = state.longitude;
+    final issueType = state.issueType;
+    final severity = state.severity;
+    final notes = state.notes;
+    final nearSensitiveLocation = state.nearSensitiveLocation;
+
+    if (imagePath == null || imagePath.isEmpty) {
+      throw const ReportSubmissionException('Cannot queue report offline: Photo is missing.');
+    }
+    if (lat == null || lng == null) {
+      throw const ReportSubmissionException('Cannot queue report offline: Location coordinates are missing.');
+    }
+    if (issueType == null) {
+      throw const ReportSubmissionException('Cannot queue report offline: Issue type is missing.');
+    }
+    if (severity == null) {
+      throw const ReportSubmissionException('Cannot queue report offline: Severity is missing.');
+    }
+
+    final dbHelper = sqliteHelper ?? SQLiteHelper.instance;
+    final reportId = const Uuid().v4();
+
+    final persistentImagePath = await _persistImageFile(imagePath, reportId);
+
+    final pendingReport = PendingReport(
+      id: reportId,
+      imageFilePath: persistentImagePath,
+      latitude: lat,
+      longitude: lng,
+      issueType: issueType.name,
+      severity: severity.name,
+      notes: notes,
+      nearSensitiveLocation: nearSensitiveLocation,
+      createdAt: DateTime.now().toIso8601String(),
+      syncStatus: 'pending',
+      retryCount: 0,
+    );
+
+    await dbHelper.insertPendingReport(pendingReport);
+    reset();
+  }
 }
 
 /// Global provider for the multi-step report creation flow.

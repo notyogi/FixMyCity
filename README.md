@@ -209,5 +209,13 @@ The project is structured as a monorepo containing:
 - **Reputation APIs & Dashboard Control**: Added `GET /api/v1/users/me/reputation` and `GET /api/v1/users/:id/reputation`, plus a default-checked spam toggle and reputation count toast in `ClusterDetailPanel.tsx`.
 - **Backfill & Test Suite**: Executed `npm run backfill:reputation` on Supabase and added `npm run test:reputation` (17 tests passing).
 
+### **Nov 13, 2026 — Anti-Spam Rate Limiting & Mobile Resilience**
+- **Per-IP Global Limiter**: Added in-memory rate limiting with Render `trust proxy` configuration and health-check bypassing for unauthenticated abuse protection.
+- **Per-User Submission Limiter**: Implemented database-backed rolling 1-hour report submission limits with composite indexing (`[user_id, created_at]`), reputation-based throttling (10/hr normal, 3/hr flagged), admin exemption, and fail-open resilience.
+- **Rate Limit Status API**: Added `GET /api/v1/reports/rate-limit-status` and standard RFC rate-limiting response headers (`RateLimit-*`, `Retry-After`).
+- **Mobile Offline Queue & Sync Handling**: Handled HTTP 429 in Flutter `fixmycity_app`, auto-pausing background synchronization without error escalation and prompting users to save bursts to offline storage.
+- **Automated Test Suite**: Added `npm run test:rate-limit` covering IP filtering, reputation tiers, rolling windows, and fail-open behaviors (8/8 tests passing).
+
+
 
 

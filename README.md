@@ -216,6 +216,14 @@ The project is structured as a monorepo containing:
 - **Mobile Offline Queue & Sync Handling**: Handled HTTP 429 in Flutter `fixmycity_app`, auto-pausing background synchronization without error escalation and prompting users to save bursts to offline storage.
 - **Automated Test Suite**: Added `npm run test:rate-limit` covering IP filtering, reputation tiers, rolling windows, and fail-open behaviors (8/8 tests passing).
 
+---
 
+## Week 8 — Citizen Status Notifications
 
-
+### **Nov 19, 2026 — In-App Status Notifications**
+- **Notification Schema**: Added `Notification` model and migration with cascade deletes and composite indexes for fast inbox queries.
+- **Idempotent Service**: Built `NotificationService` grouping cluster reports per citizen, enforcing unique dedupe keys, and using neutral copy.
+- **Status Lifecycle Hooks**: Integrated non-blocking notification triggers into single-report and cluster status transitions post-commit.
+- **Scoped APIs**: Added `GET /notifications`, route-prioritized `GET /unread-count`, `PATCH /:id/read`, and `POST /read-all` scoped to `req.user.id`.
+- **Mobile UI & Provider**: Built `NotificationsScreen` with an unread badge on `HomeScreen`, Riverpod state, optimistic read updates, and offline fallback.
+- **Tests & Retention**: Added 30-day read cleanup script, backend test suite (20 assertions passing), and mobile unit tests (44 passing).

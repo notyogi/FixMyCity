@@ -42,6 +42,10 @@ enum ReputationReason {
   CONFIRMED_BY_OTHER
 }
 
+enum NotificationType {
+  STATUS_CHANGED
+}
+
 model User {
   id                String               @id @db.Uuid
   name              String?
@@ -51,6 +55,7 @@ model User {
   reports           Report[]
   confirmations     ReportConfirmation[]
   reputation_events ReputationEvent[]
+  notifications     Notification[]
 
   @@map("users")
 }
@@ -74,6 +79,7 @@ model Report {
   cluster           ReportCluster?       @relation(fields: [cluster_id], references: [id])
   confirmations     ReportConfirmation[]
   reputation_events ReputationEvent[]
+  notifications     Notification[]
 
   @@index([status])
   @@index([cluster_id])
@@ -130,3 +136,26 @@ model ReputationEvent {
   @@index([user_id, created_at])
   @@map("reputation_events")
 }
+
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  user_id    String           @db.Uuid
+  report_id  String           @db.Uuid
+  cluster_id String?
+  type       NotificationType
+  title      String
+  body       String
+  old_status ReportStatus?
+  new_status ReportStatus?
+  read_at    DateTime?
+  created_at DateTime         @default(now())
+  dedupe_key String           @unique
+
+  user   User   @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, read_at, created_at])
+  @@index([user_id, created_at])
+  @@map("notifications")
+}
+

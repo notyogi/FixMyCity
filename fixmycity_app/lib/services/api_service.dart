@@ -8,6 +8,40 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/report_model.dart';
+import '../models/notification_model.dart';
+
+/// Response payload containing paginated in-app notifications.
+class NotificationListResponse {
+  final List<NotificationModel> data;
+  final int page;
+  final int limit;
+  final int total;
+  final int unreadCount;
+
+  const NotificationListResponse({
+    required this.data,
+    required this.page,
+    required this.limit,
+    required this.total,
+    required this.unreadCount,
+  });
+
+  factory NotificationListResponse.fromJson(Map<String, dynamic> json) {
+    final rawList = json['data'] as List<dynamic>? ?? [];
+    final items = rawList
+        .whereType<Map<String, dynamic>>()
+        .map((m) => NotificationModel.fromJson(m))
+        .toList();
+
+    return NotificationListResponse(
+      data: items,
+      page: json['page'] as int? ?? 1,
+      limit: json['limit'] as int? ?? 20,
+      total: json['total'] as int? ?? items.length,
+      unreadCount: json['unread_count'] as int? ?? 0,
+    );
+  }
+}
 
 /// Thrown when the user's Supabase session is missing or expired.
 class NotAuthenticatedException implements Exception {
@@ -434,5 +468,228 @@ class ApiService {
   Future<ReportModel> updateReportStatus(String reportId, String status) async {
     // Stub implementation: Will call PATCH $baseUrl/reports/$reportId/status
     throw UnimplementedError('updateReportStatus() has not been implemented yet.');
+  }
+
+  /// Fetch in-app notifications for the authenticated citizen.
+  Future<NotificationListResponse> fetchNotifications({
+    bool unreadOnly = false,
+    int page = 1,
+    int limit = 20,
+    String? authToken,
+  }) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    var token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final uri = Uri.parse('$baseApi/notifications?unread_only=$unreadOnly&page=$page&limit=$limit');
+
+    try {
+      final httpClient = client ?? http.Client();
+      final response = await httpClient.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return NotificationListResponse.fromJson(decoded);
+        }
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException();
+      }
+
+      throw ReportSubmissionException(
+        'Failed to fetch notifications (HTTP ${response.statusCode})',
+      );
+    } on SocketException catch (e) {
+      throw ReportSubmissionException('No network connection: ${e.message}');
+    } on TimeoutException catch (e) {
+      throw ReportSubmissionException('Request timed out: ${e.message}');
+    } catch (e) {
+      debugPrint('ApiService.fetchNotifications error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch unread notifications count for badge display and polling.
+  Future<int> fetchUnreadCount({String? authToken}) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    var token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final uri = Uri.parse('$baseApi/notifications/unread-count');
+
+    try {
+      final httpClient = client ?? http.Client();
+      final response = await httpClient.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic> && decoded.containsKey('unread_count')) {
+          return decoded['unread_count'] as int? ?? 0;
+        }
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException();
+      }
+
+      throw ReportSubmissionException(
+        'Failed to fetch unread count (HTTP ${response.statusCode})',
+      );
+    } on SocketException catch (e) {
+      throw ReportSubmissionException('No network connection: ${e.message}');
+    } on TimeoutException catch (e) {
+      throw ReportSubmissionException('Request timed out: ${e.message}');
+    } catch (e) {
+      debugPrint('ApiService.fetchUnreadCount error: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark a specific notification as read.
+  Future<NotificationModel?> markNotificationRead(String id, {String? authToken}) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    var token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final uri = Uri.parse('$baseApi/notifications/$id/read');
+
+    try {
+      final httpClient = client ?? http.Client();
+      final response = await httpClient.patch(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic> && decoded['notification'] is Map<String, dynamic>) {
+          return NotificationModel.fromJson(decoded['notification']);
+        }
+        return null;
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException();
+      }
+
+      throw ReportSubmissionException(
+        'Failed to mark notification as read (HTTP ${response.statusCode})',
+      );
+    } on SocketException catch (e) {
+      throw ReportSubmissionException('No network connection: ${e.message}');
+    } on TimeoutException catch (e) {
+      throw ReportSubmissionException('Request timed out: ${e.message}');
+    } catch (e) {
+      debugPrint('ApiService.markNotificationRead error: $e');
+      rethrow;
+    }
+  }
+
+  /// Mark all unread notifications for the user as read.
+  Future<int> markAllNotificationsRead({String? authToken}) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    var token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final uri = Uri.parse('$baseApi/notifications/read-all');
+
+    try {
+      final httpClient = client ?? http.Client();
+      final response = await httpClient.post(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic> && decoded.containsKey('updated_count')) {
+          return decoded['updated_count'] as int? ?? 0;
+        }
+        return 0;
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException();
+      }
+
+      throw ReportSubmissionException(
+        'Failed to mark all notifications as read (HTTP ${response.statusCode})',
+      );
+    } on SocketException catch (e) {
+      throw ReportSubmissionException('No network connection: ${e.message}');
+    } on TimeoutException catch (e) {
+      throw ReportSubmissionException('Request timed out: ${e.message}');
+    } catch (e) {
+      debugPrint('ApiService.markAllNotificationsRead error: $e');
+      rethrow;
+    }
   }
 }

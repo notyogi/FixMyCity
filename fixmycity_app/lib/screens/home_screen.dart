@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../models/report_model.dart';
+import '../providers/notifications_provider.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
@@ -11,15 +13,16 @@ import '../services/sync_service.dart';
 import 'camera_test_screen.dart';
 import 'cloudinary_test_screen.dart';
 import 'pending_reports_screen.dart';
+import 'notifications_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObserver {
   int _pendingCount = 0;
   final SyncService _syncService = SyncService();
 
@@ -34,12 +37,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _refreshAllData();
     _syncService.isSyncingNotifier.addListener(_refreshPendingCount);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(notificationsProvider.notifier).init();
+    });
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _refreshAllData();
+      ref.read(notificationsProvider.notifier).onResume();
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      ref.read(notificationsProvider.notifier).onPause();
     }
   }
 
@@ -138,6 +147,39 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ],
         ),
         actions: [
+          Consumer(
+            builder: (context, ref, child) {
+              final unreadCount = ref.watch(
+                notificationsProvider.select((s) => s.unreadCount),
+              );
+              final badgeLabel = unreadCount > 9 ? '9+' : '$unreadCount';
+              return Semantics(
+                label: unreadCount > 0
+                    ? 'Notifications, $unreadCount unread'
+                    : 'Notifications',
+                button: true,
+                child: IconButton(
+                  icon: Badge(
+                    isLabelVisible: unreadCount > 0,
+                    label: Text(badgeLabel),
+                    backgroundColor: Colors.red.shade700,
+                    child: const Icon(Icons.notifications_outlined),
+                  ),
+                  tooltip: unreadCount > 0
+                      ? 'Notifications ($badgeLabel unread)'
+                      : 'Notifications',
+                  onPressed: () async {
+                    await Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const NotificationsScreen(),
+                      ),
+                    );
+                    _refreshAllData();
+                  },
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: Badge(
               isLabelVisible: _pendingCount > 0,
@@ -158,6 +200,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             tooltip: 'Log Out',
             onPressed: () async {
               try {
+                ref.read(notificationsProvider.notifier).clearOnLogout();
                 await AuthService().signOut();
               } catch (_) {}
               if (context.mounted) {

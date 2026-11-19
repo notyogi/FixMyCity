@@ -8,6 +8,7 @@ import healthRoutes from './routes/health.routes';
 import reportsRoutes from './routes/reports.routes';
 import authRoutes from './routes/auth.routes';
 import usersRoutes from './routes/users.routes';
+import notificationsRoutes from './routes/notifications.routes';
 import { requireAuth } from './middleware/auth.middleware';
 
 const app: Application = express();
@@ -102,6 +103,7 @@ app.use('/api/v1/health', healthRoutes);
 app.use('/api/v1/reports', reportsRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/users', usersRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
 
 // Protected test endpoint to verify Supabase JWT authentication
 app.get('/api/v1/protected-test', requireAuth, (req: Request, res: Response) => {
@@ -116,6 +118,7 @@ app.use('/api/health', healthRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/notifications', notificationsRoutes);
 app.get('/api/protected-test', requireAuth, (req: Request, res: Response) => {
   res.status(200).json({
     message: 'Protected route accessed successfully',

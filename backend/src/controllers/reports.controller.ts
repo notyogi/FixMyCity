@@ -16,6 +16,7 @@ import {
 import { recomputeClusterPriority } from '../services/priority.service';
 import { PriorityQueueService } from '../services/priorityQueue.service';
 import { ReputationService, ReputationEventInput } from '../services/reputation.service';
+import { NotificationService, ReportStatusChangeItem } from '../services/notification.service';
 import { calculateUserRateLimitStatus } from '../middleware/reportRateLimit.middleware';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -78,16 +79,43 @@ export async function performSingleReportStatusUpdate(params: {
   targetStatus: ReportStatus;
   spam?: boolean;
   applyReputationFn?: ApplyReputationFn;
+  adminUserId?: string;
+  createNotificationsFn?: (
+    changes: ReportStatusChangeItem[],
+    adminUserId?: string
+  ) => Promise<number>;
 }): Promise<{
   changedReports: Array<{ id: string; user_id: string }>;
   reputationChanges: number;
+  notificationsCreated: number;
 }> {
   const {
     reportId,
     targetStatus,
     spam,
     applyReputationFn = ReputationService.applyReputationEvents,
+    adminUserId,
+    createNotificationsFn = NotificationService.createStatusNotifications,
   } = params;
+
+  // 1. Capture old status and metadata BEFORE update (only if not already closed and not targetStatus)
+  const reportBefore = await prisma.report.findFirst({
+    where: {
+      id: reportId,
+      status: {
+        notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+        not: targetStatus,
+      },
+    },
+    select: {
+      id: true,
+      user_id: true,
+      cluster_id: true,
+      issue_type: true,
+      status: true,
+      created_at: true,
+    },
+  });
 
   const changedReports = await prisma.$transaction(async (tx) => {
     return tx.report.updateManyAndReturn({
@@ -122,7 +150,34 @@ export async function performSingleReportStatusUpdate(params: {
     }
   }
 
-  return { changedReports, reputationChanges };
+  // Hook: Create status notifications for actually changed reports after commit
+  // Non-blocking: failures are logged and never roll back or fail status update
+  let notificationsCreated = 0;
+  if (changedReports.length > 0 && reportBefore) {
+    try {
+      notificationsCreated = await createNotificationsFn(
+        [
+          {
+            reportId: reportBefore.id,
+            clusterId: reportBefore.cluster_id,
+            reporterId: reportBefore.user_id,
+            issueType: reportBefore.issue_type,
+            oldStatus: reportBefore.status,
+            newStatus: targetStatus,
+            createdAt: reportBefore.created_at,
+          },
+        ],
+        adminUserId
+      );
+    } catch (notifError) {
+      console.error(
+        `[updateReportStatus] Notification creation failed for report ${reportId}:`,
+        notifError instanceof Error ? notifError.message : notifError
+      );
+    }
+  }
+
+  return { changedReports, reputationChanges, notificationsCreated };
 }
 
 export async function performClusterStatusUpdate(params: {
@@ -130,16 +185,45 @@ export async function performClusterStatusUpdate(params: {
   targetStatus: ReportStatus;
   spam?: boolean;
   applyReputationFn?: ApplyReputationFn;
+  adminUserId?: string;
+  createNotificationsFn?: (
+    changes: ReportStatusChangeItem[],
+    adminUserId?: string
+  ) => Promise<number>;
 }): Promise<{
   changedReports: Array<{ id: string; user_id: string }>;
   reputationChanges: number;
+  notificationsCreated: number;
 }> {
   const {
     clusterId,
     targetStatus,
     spam,
     applyReputationFn = ReputationService.applyReputationEvents,
+    adminUserId,
+    createNotificationsFn = NotificationService.createStatusNotifications,
   } = params;
+
+  // 1. Capture old status and metadata BEFORE update (only active reports whose status actually changes)
+  const reportsBefore = await prisma.report.findMany({
+    where: {
+      cluster_id: clusterId,
+      status: {
+        notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+        not: targetStatus,
+      },
+    },
+    select: {
+      id: true,
+      user_id: true,
+      cluster_id: true,
+      issue_type: true,
+      status: true,
+      created_at: true,
+    },
+  });
+
+  const reportsBeforeMap = new Map(reportsBefore.map((r) => [r.id, r]));
 
   // Transaction 1: Atomically transition only active (non-closed) reports in the cluster
   const changedReports = await prisma.$transaction(async (tx) => {
@@ -148,6 +232,7 @@ export async function performClusterStatusUpdate(params: {
         cluster_id: clusterId,
         status: {
           notIn: [ReportStatus.FIXED, ReportStatus.REJECTED],
+          not: targetStatus,
         },
       },
       data: {
@@ -181,7 +266,37 @@ export async function performClusterStatusUpdate(params: {
     }
   }
 
-  return { changedReports, reputationChanges };
+  // Hook: Create status notifications for actually changed reports after commit
+  // Non-blocking: failures are logged and never roll back or fail status update
+  let notificationsCreated = 0;
+  const statusChanges: ReportStatusChangeItem[] = [];
+  for (const changed of changedReports) {
+    const before = reportsBeforeMap.get(changed.id);
+    if (before && before.status !== targetStatus) {
+      statusChanges.push({
+        reportId: before.id,
+        clusterId: before.cluster_id,
+        reporterId: before.user_id,
+        issueType: before.issue_type,
+        oldStatus: before.status,
+        newStatus: targetStatus,
+        createdAt: before.created_at,
+      });
+    }
+  }
+
+  if (statusChanges.length > 0) {
+    try {
+      notificationsCreated = await createNotificationsFn(statusChanges, adminUserId);
+    } catch (notifError) {
+      console.error(
+        `[updateClusterStatus] Notification creation failed for cluster ${clusterId}:`,
+        notifError instanceof Error ? notifError.message : notifError
+      );
+    }
+  }
+
+  return { changedReports, reputationChanges, notificationsCreated };
 }
 
 /**
@@ -425,10 +540,11 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
       return;
     }
 
-    const { reputationChanges } = await performSingleReportStatusUpdate({
+    const { reputationChanges, notificationsCreated } = await performSingleReportStatusUpdate({
       reportId: id,
       targetStatus: validation.data.status,
       spam: validation.data.spam,
+      adminUserId: req.user?.id,
     });
 
     const updatedReport = await prisma.report.findUnique({
@@ -456,6 +572,7 @@ export const updateReportStatus = async (req: Request, res: Response): Promise<v
     res.status(200).json({
       ...updatedReport,
       reputation_changes: reputationChanges,
+      notifications_created: notificationsCreated,
     });
   } catch (error) {
     console.error('Error in updateReportStatus:', error);
@@ -802,11 +919,12 @@ export const updateClusterStatus = async (req: Request, res: Response): Promise<
       return;
     }
 
-    // Atomically transition all non-closed reports in the cluster and apply reputation events
-    const { changedReports, reputationChanges } = await performClusterStatusUpdate({
+    // Atomically transition all non-closed reports in the cluster, apply reputation events, and notify reporters
+    const { changedReports, reputationChanges, notificationsCreated } = await performClusterStatusUpdate({
       clusterId: id,
       targetStatus,
       spam: validation.data.spam,
+      adminUserId: req.user?.id,
     });
 
     // Recompute cluster priority score after transaction commit (non-blocking error handling)
@@ -853,6 +971,7 @@ export const updateClusterStatus = async (req: Request, res: Response): Promise<
       ...refreshedDetail,
       updated_reports_count: changedReports.length,
       reputation_changes: reputationChanges,
+      notifications_created: notificationsCreated,
     });
   } catch (error) {
     console.error('Error in updateClusterStatus:', error);

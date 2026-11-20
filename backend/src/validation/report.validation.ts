@@ -57,6 +57,15 @@ export const priorityQueueQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
 
+export const myReportsQuerySchema = z.object({
+  status: z.string().optional(),
+  active: booleanQueryParam.optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  // user_id is accepted in schema if passed, but will be ignored by controller in favor of req.user.id
+  user_id: z.string().optional(),
+});
+
 export type CreateReportInput = z.infer<typeof createReportSchema>;
 export type UpdateStatusInput = z.infer<typeof updateStatusSchema>;
 export type ListReportsQuery = z.infer<typeof listReportsQuerySchema>;

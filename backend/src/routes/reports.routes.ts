@@ -8,6 +8,7 @@ import {
   getClusterById,
   updateClusterStatus,
   getReportRateLimitStatus,
+  getMyReports,
 } from '../controllers/reports.controller';
 import { requireAuth, requireAdmin } from '../middleware/auth.middleware';
 import { reportRateLimit } from '../middleware/reportRateLimit.middleware';
@@ -47,6 +48,14 @@ router.get('/priority-queue', requireAuth, requireAdmin, getPriorityQueue);
 // failing UUID regex validation (404) rather than reaching the cluster handlers.
 router.get('/clusters/:id', requireAuth, requireAdmin, getClusterById);
 router.patch('/clusters/:id/status', requireAuth, requireAdmin, updateClusterStatus);
+
+// GET /reports/mine -> requireAuth (returns authenticated citizen's personal report submissions)
+// IMPORTANT ROUTE ORDERING:
+// This route MUST be registered BEFORE GET /:id.
+// Express evaluates routes sequentially. If GET /:id were declared above /mine, requests to
+// /reports/mine would be captured by /:id with req.params.id = "mine", triggering a 404 UUID
+// validation failure instead of reaching the citizen submissions handler.
+router.get('/mine', requireAuth, getMyReports);
 
 // GET /reports/:id -> requireAuth, then getReportById
 router.get('/:id', requireAuth, getReportById);

@@ -43,6 +43,103 @@ class NotificationListResponse {
   }
 }
 
+/// Counts summary for citizen's lifetime submissions.
+class MyReportsCounts {
+  final int total;
+  final int active;
+  final int fixed;
+  final int rejected;
+
+  const MyReportsCounts({
+    this.total = 0,
+    this.active = 0,
+    this.fixed = 0,
+    this.rejected = 0,
+  });
+
+  factory MyReportsCounts.fromJson(Map<String, dynamic> json) {
+    return MyReportsCounts(
+      total: json['total'] as int? ?? 0,
+      active: json['active'] as int? ?? 0,
+      fixed: json['fixed'] as int? ?? 0,
+      rejected: json['rejected'] as int? ?? 0,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'total': total,
+    'active': active,
+    'fixed': fixed,
+    'rejected': rejected,
+  };
+}
+
+/// Response payload containing paginated personal reports and lifetime summary counts.
+class MyReportsResponse {
+  final List<ReportModel> data;
+  final int page;
+  final int limit;
+  final int total;
+  final MyReportsCounts counts;
+
+  const MyReportsResponse({
+    required this.data,
+    required this.page,
+    required this.limit,
+    required this.total,
+    required this.counts,
+  });
+
+  factory MyReportsResponse.fromJson(Map<String, dynamic> json) {
+    final rawList = json['data'] as List<dynamic>? ?? [];
+    final items = rawList
+        .whereType<Map<String, dynamic>>()
+        .map((m) => ReportModel.fromMap(m))
+        .toList();
+
+    return MyReportsResponse(
+      data: items,
+      page: json['page'] as int? ?? 1,
+      limit: json['limit'] as int? ?? 20,
+      total: json['total'] as int? ?? items.length,
+      counts: json['counts'] is Map<String, dynamic>
+          ? MyReportsCounts.fromJson(json['counts'] as Map<String, dynamic>)
+          : const MyReportsCounts(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'data': data.map((d) => d.toMap()).toList(),
+    'page': page,
+    'limit': limit,
+    'total': total,
+    'counts': counts.toJson(),
+  };
+}
+
+/// Citizen reputation summary returned by GET /users/me/reputation.
+class UserReputationSummary {
+  final int score;
+  final String level;
+
+  const UserReputationSummary({
+    this.score = 0,
+    this.level = 'NEW',
+  });
+
+  factory UserReputationSummary.fromJson(Map<String, dynamic> json) {
+    return UserReputationSummary(
+      score: json['score'] as int? ?? 0,
+      level: json['level'] as String? ?? 'NEW',
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'score': score,
+    'level': level,
+  };
+}
+
 /// Thrown when the user's Supabase session is missing or expired.
 class NotAuthenticatedException implements Exception {
   final String message;
@@ -690,6 +787,204 @@ class ApiService {
     } catch (e) {
       debugPrint('ApiService.markAllNotificationsRead error: $e');
       rethrow;
+    }
+  }
+
+  /// Fetch the authenticated user's own damage reports with lifetime counts.
+  /// Calls GET /api/v1/reports/mine (protected by requireAuth).
+  ///
+  /// Includes an automatic fallback to GET /reports?user_id= if the backend
+  /// environment (e.g. Render free tier) has not yet deployed /reports/mine.
+  Future<MyReportsResponse> fetchMyReports({
+    String? status,
+    bool? active,
+    int page = 1,
+    int limit = 20,
+    String? authToken,
+  }) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    if (rawUrl.isEmpty) {
+      throw const ReportSubmissionException(
+        'Backend URL is not configured. Check BACKEND_API_URL in .env.',
+      );
+    }
+
+    String? token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final endpoint = '$baseApi/reports/mine';
+
+    final queryParams = <String, String>{
+      'page': page.toString(),
+      'limit': limit.toString(),
+      if (status != null && status.isNotEmpty) 'status': status,
+      if (active != null) 'active': active.toString(),
+    };
+
+    final uri = Uri.parse(endpoint).replace(queryParameters: queryParams);
+
+    try {
+      final httpClient = client ?? http.Client();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+        const Duration(seconds: 15),
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return MyReportsResponse.fromJson(decoded);
+        }
+        return MyReportsResponse(
+          data: const [],
+          page: page,
+          limit: limit,
+          total: 0,
+          counts: const MyReportsCounts(),
+        );
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException(
+          'Your session expired, please log in again.',
+        );
+      }
+
+      if (response.statusCode == 404) {
+        // Fallback for deployments where /reports/mine is not yet live (e.g. Render pending git deployment):
+        // Query GET /reports?user_id=... supported by legacy/pre-existing backend instances
+        String? currentUid;
+        try {
+          currentUid = Supabase.instance.client.auth.currentSession?.user.id;
+        } catch (_) {}
+
+        final fallbackList = await fetchReports(
+          userId: currentUid,
+          authToken: token,
+          limit: 100,
+          page: 1,
+        );
+
+        final totalCount = fallbackList.length;
+        final activeCount = fallbackList.where((r) {
+          final s = r.status.toUpperCase();
+          return s == 'SUBMITTED' || s == 'UNDER_REVIEW' || s == 'SCHEDULED';
+        }).length;
+        final fixedCount = fallbackList
+            .where((r) =>
+                r.status.toUpperCase() == 'FIXED' ||
+                r.status.toUpperCase() == 'RESOLVED')
+            .length;
+        final rejectedCount = fallbackList
+            .where((r) => r.status.toUpperCase() == 'REJECTED')
+            .length;
+
+        List<ReportModel> filteredList = fallbackList;
+        if (active == true) {
+          filteredList = fallbackList.where((r) {
+            final s = r.status.toUpperCase();
+            return s == 'SUBMITTED' ||
+                s == 'UNDER_REVIEW' ||
+                s == 'SCHEDULED';
+          }).toList();
+        } else if (status != null && status.isNotEmpty) {
+          filteredList = fallbackList
+              .where((r) => r.status.toUpperCase() == status.toUpperCase())
+              .toList();
+        }
+
+        return MyReportsResponse(
+          data: filteredList,
+          page: page,
+          limit: limit,
+          total: filteredList.length,
+          counts: MyReportsCounts(
+            total: totalCount,
+            active: activeCount,
+            fixed: fixedCount,
+            rejected: rejectedCount,
+          ),
+        );
+      }
+
+      throw ReportSubmissionException('Failed to fetch personal reports (HTTP ${response.statusCode})');
+    } on SocketException catch (e) {
+      throw ReportSubmissionException('No network connection: ${e.message}');
+    } on TimeoutException catch (e) {
+      throw ReportSubmissionException('Request timed out: ${e.message}');
+    } catch (e) {
+      debugPrint('ApiService.fetchMyReports error: $e');
+      rethrow;
+    }
+  }
+
+  /// Fetch authenticated citizen's reputation score and level.
+  /// Calls GET /api/v1/users/me/reputation.
+  Future<UserReputationSummary> fetchMyReputation({String? authToken}) async {
+    final rawUrl = baseUrl ?? dotenv.env['BACKEND_API_URL'] ?? '';
+    if (rawUrl.isEmpty) {
+      return const UserReputationSummary();
+    }
+
+    String? token = authToken;
+    if (token == null || token.isEmpty) {
+      try {
+        token = Supabase.instance.client.auth.currentSession?.accessToken;
+      } catch (e) {
+        debugPrint('ApiService: Could not read Supabase session token: $e');
+      }
+    }
+
+    if (token == null || token.isEmpty) {
+      throw const NotAuthenticatedException();
+    }
+
+    var cleanBase = rawUrl.trim().replaceAll(RegExp(r'/+$'), '');
+    final baseApi = cleanBase.endsWith('/api') ? cleanBase : '$cleanBase/api/v1';
+    final uri = Uri.parse('$baseApi/users/me/reputation');
+
+    try {
+      final httpClient = client ?? http.Client();
+      final headers = <String, String>{
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
+      final response = await httpClient.get(uri, headers: headers).timeout(
+        const Duration(seconds: 10),
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return UserReputationSummary.fromJson(decoded);
+        }
+      }
+
+      if (response.statusCode == 401) {
+        throw const NotAuthenticatedException();
+      }
+
+      return const UserReputationSummary();
+    } catch (e) {
+      debugPrint('ApiService.fetchMyReputation error: $e');
+      return const UserReputationSummary();
     }
   }
 }

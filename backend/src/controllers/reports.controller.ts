@@ -5,6 +5,7 @@ import {
   updateStatusSchema,
   listReportsQuerySchema,
   priorityQueueQuerySchema,
+  myReportsQuerySchema,
 } from '../validation/report.validation';
 import { ReportStatus, Severity, IssueType, Prisma, ReputationReason, ReputationEvent } from '@prisma/client';
 import { ImageHashService } from '../services/imageHash.service';
@@ -439,7 +440,24 @@ export const listReports = async (req: Request, res: Response): Promise<void> =>
 
     if (status) where.status = status;
     if (issue_type) where.issue_type = issue_type;
-    if (user_id) where.user_id = user_id;
+
+    // Backward-compatibility authorization guard:
+    // Non-admin callers may only pass their own user_id. Querying another citizen's submissions
+    // returns 403 Forbidden to protect reporter privacy. Admins may filter by any user_id.
+    if (user_id) {
+      const adminUserIds = (process.env.ADMIN_USER_IDS || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean);
+      const isAdmin = req.user?.id ? adminUserIds.includes(req.user.id) : false;
+      if (!isAdmin && user_id !== req.user?.id) {
+        res.status(403).json({
+          error: 'Forbidden: You can only query your own reports',
+        });
+        return;
+      }
+      where.user_id = user_id;
+    }
 
     const [reports, total] = await Promise.all([
       prisma.report.findMany({
@@ -1001,6 +1019,200 @@ export const getReportRateLimitStatus = async (req: Request, res: Response): Pro
     });
   } catch (error) {
     console.error('Error in getReportRateLimitStatus:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+/**
+ * 9. getMyReports(req, res)
+ * GET /api/v1/reports/mine
+ * Protected by requireAuth. Always filters strictly by req.user.id and ignores any
+ * user_id in the query string.
+ *
+ * Supports optional filtering:
+ *   - active=true: matches SUBMITTED, UNDER_REVIEW, SCHEDULED
+ *   - status: single ReportStatus or comma-separated list of ReportStatuses
+ *
+ * Returns paginated items sorted by created_at desc with id tie-breaker,
+ * cluster summary (without exposing other citizens' identities), and historical
+ * lifetime counts { total, active, fixed, rejected } computed in one grouped query.
+ */
+export const getMyReports = async (req: Request, res: Response): Promise<void> => {
+  try {
+    if (!req.user || !req.user.id) {
+      res.status(401).json({ error: 'Unauthorized: User identity not found' });
+      return;
+    }
+
+    const validation = myReportsQuerySchema.safeParse(req.query);
+    if (!validation.success) {
+      res.status(400).json({
+        error: 'Invalid query parameters',
+        details: validation.error.issues,
+      });
+      return;
+    }
+
+    const { status, active, page, limit } = validation.data;
+    const skip = (page - 1) * limit;
+    const userId = req.user.id;
+
+    const where: Prisma.ReportWhereInput = {
+      user_id: userId,
+    };
+
+    if (active === true) {
+      where.status = {
+        in: [ReportStatus.SUBMITTED, ReportStatus.UNDER_REVIEW, ReportStatus.SCHEDULED],
+      };
+    } else if (status && status.trim().length > 0) {
+      const parsedStatuses = status
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter((s) => Object.values(ReportStatus).includes(s as ReportStatus)) as ReportStatus[];
+
+      if (parsedStatuses.length === 0) {
+        res.status(400).json({
+          error: `Invalid status parameter. Must be one of: ${Object.values(ReportStatus).join(', ')}`,
+        });
+        return;
+      }
+
+      if (parsedStatuses.length === 1) {
+        where.status = parsedStatuses[0];
+      } else {
+        where.status = { in: parsedStatuses };
+      }
+    }
+
+    // Execute paginated reports, total matching count, and user's lifetime status distribution in parallel
+    const [reports, total, groupedCounts] = await Promise.all([
+      prisma.report.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: [{ created_at: 'desc' }, { id: 'desc' }],
+        select: {
+          id: true,
+          image_url: true,
+          issue_type: true,
+          severity: true,
+          status: true,
+          notes: true,
+          lat: true,
+          lng: true,
+          near_sensitive_location: true,
+          created_at: true,
+          cluster: {
+            select: {
+              id: true,
+              confirmation_count: true,
+              reports: {
+                select: {
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      prisma.report.count({ where }),
+      prisma.report.groupBy({
+        by: ['status'],
+        where: { user_id: userId },
+        _count: { _all: true },
+      }),
+    ]);
+
+    // Aggregate lifetime counts for user history
+    let activeCount = 0;
+    let fixedCount = 0;
+    let rejectedCount = 0;
+    let totalLifetime = 0;
+
+    for (const group of groupedCounts) {
+      const count = group._count._all;
+      totalLifetime += count;
+      if (
+        group.status === ReportStatus.SUBMITTED ||
+        group.status === ReportStatus.UNDER_REVIEW ||
+        group.status === ReportStatus.SCHEDULED
+      ) {
+        activeCount += count;
+      } else if (group.status === ReportStatus.FIXED) {
+        fixedCount += count;
+      } else if (group.status === ReportStatus.REJECTED) {
+        rejectedCount += count;
+      }
+    }
+
+    const counts = {
+      total: totalLifetime,
+      active: activeCount,
+      fixed: fixedCount,
+      rejected: rejectedCount,
+    };
+
+    // Format report items with sanitized cluster summaries (no reporter PII)
+    const formattedData = reports.map((r) => {
+      let clusterSummary: {
+        id: string;
+        confirmation_count: number;
+        status_of_cluster: ReportStatus;
+      } | null = null;
+
+      if (r.cluster) {
+        let clusterStatus: ReportStatus = ReportStatus.SUBMITTED;
+        const activeClusterReports = r.cluster.reports.filter(
+          (cr) => cr.status !== ReportStatus.FIXED && cr.status !== ReportStatus.REJECTED
+        );
+
+        if (activeClusterReports.length > 0) {
+          let mostAdvanced = activeClusterReports[0].status;
+          let highestRank = STATUS_PRECEDENCE[mostAdvanced] ?? 0;
+          for (const cr of activeClusterReports) {
+            const rank = STATUS_PRECEDENCE[cr.status] ?? 0;
+            if (rank > highestRank) {
+              highestRank = rank;
+              mostAdvanced = cr.status;
+            }
+          }
+          clusterStatus = mostAdvanced;
+        } else if (r.cluster.reports.length > 0) {
+          clusterStatus = r.cluster.reports[0].status;
+        }
+
+        clusterSummary = {
+          id: r.cluster.id,
+          confirmation_count: r.cluster.confirmation_count,
+          status_of_cluster: clusterStatus,
+        };
+      }
+
+      return {
+        id: r.id,
+        image_url: r.image_url,
+        issue_type: r.issue_type,
+        severity: r.severity,
+        status: r.status,
+        notes: r.notes,
+        lat: r.lat,
+        lng: r.lng,
+        near_sensitive_location: r.near_sensitive_location,
+        created_at: r.created_at,
+        cluster: clusterSummary,
+      };
+    });
+
+    res.status(200).json({
+      data: formattedData,
+      page,
+      limit,
+      total,
+      counts,
+    });
+  } catch (error) {
+    console.error('Error in getMyReports:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

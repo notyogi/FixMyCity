@@ -135,6 +135,7 @@ class ReportModel {
   final String? userName;
   final String? clusterId;
   final int? confirmationCount;
+  final String? clusterStatus;
 
   const ReportModel({
     required this.id,
@@ -156,6 +157,7 @@ class ReportModel {
     this.userName,
     this.clusterId,
     this.confirmationCount,
+    this.clusterStatus,
   });
 
   /// User-friendly normalized status for UI filtering and badges:
@@ -238,6 +240,7 @@ class ReportModel {
     String? userName,
     String? clusterId,
     int? confirmationCount,
+    String? clusterStatus,
   }) {
     return ReportModel(
       id: id ?? this.id,
@@ -259,6 +262,7 @@ class ReportModel {
       userName: userName ?? this.userName,
       clusterId: clusterId ?? this.clusterId,
       confirmationCount: confirmationCount ?? this.confirmationCount,
+      clusterStatus: clusterStatus ?? this.clusterStatus,
     );
   }
 
@@ -296,10 +300,12 @@ class ReportModel {
     // Cluster info (supports nested cluster or direct confirmation_count)
     String? clusterIdVal = map['cluster_id'] as String? ?? map['clusterId'] as String?;
     int? confirmCountVal;
+    String? clusterStatusVal = map['cluster_status'] as String? ?? map['clusterStatus'] as String?;
     if (map['cluster'] is Map<String, dynamic>) {
       final clusterMap = map['cluster'] as Map<String, dynamic>;
       confirmCountVal = clusterMap['confirmation_count'] as int?;
       clusterIdVal ??= clusterMap['id'] as String?;
+      clusterStatusVal ??= (clusterMap['status_of_cluster'] ?? clusterMap['status']) as String?;
     } else if (map['confirmation_count'] is int) {
       confirmCountVal = map['confirmation_count'] as int;
     }
@@ -337,11 +343,14 @@ class ReportModel {
       imageUrl: (map['image_url'] ?? map['imageUrl']) as String?,
       status: ((map['status'] as String?) ?? 'SUBMITTED'),
       createdAt: createdAtVal,
-      isSynced: map['is_synced'] == 1 || map['is_synced'] == true,
+      isSynced: map['is_synced'] == null
+          ? true
+          : (map['is_synced'] == 1 || map['is_synced'] == true),
       userId: (map['user_id'] ?? map['userId']) as String?,
       userName: userNameVal,
       clusterId: clusterIdVal,
       confirmationCount: confirmCountVal,
+      clusterStatus: clusterStatusVal,
     );
   }
 
@@ -366,6 +375,7 @@ class ReportModel {
       'user_name': userName,
       'cluster_id': clusterId,
       'confirmation_count': confirmationCount,
+      'cluster_status': clusterStatus,
     };
   }
 

@@ -4,6 +4,7 @@ import '../services/auth_service.dart';
 import '../services/api_service.dart';
 import '../models/report_model.dart';
 import '../providers/notifications_provider.dart';
+import '../providers/my_reports_provider.dart';
 import 'login_screen.dart';
 import 'report_submission_screen.dart';
 import 'my_reports_screen.dart';
@@ -201,6 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> with WidgetsBindingObse
             onPressed: () async {
               try {
                 ref.read(notificationsProvider.notifier).clearOnLogout();
+                ref.read(myReportsProvider.notifier).clearOnLogout();
                 await AuthService().signOut();
               } catch (_) {}
               if (context.mounted) {

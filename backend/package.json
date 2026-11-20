@@ -22,7 +22,8 @@
     "test:reputation": "ts-node --files src/scripts/testReputation.ts",
     "test:rate-limit": "ts-node --files src/scripts/testRateLimit.ts",
     "test:notifications": "ts-node --files src/scripts/testNotifications.ts",
-    "cleanup:notifications": "ts-node --files src/scripts/cleanupNotifications.ts"
+    "cleanup:notifications": "ts-node --files src/scripts/cleanupNotifications.ts",
+    "test:my-reports": "ts-node --files src/scripts/testMyReports.ts"
   },
   "keywords": [
     "fixmycity",

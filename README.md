@@ -227,3 +227,12 @@ The project is structured as a monorepo containing:
 - **Scoped APIs**: Added `GET /notifications`, route-prioritized `GET /unread-count`, `PATCH /:id/read`, and `POST /read-all` scoped to `req.user.id`.
 - **Mobile UI & Provider**: Built `NotificationsScreen` with an unread badge on `HomeScreen`, Riverpod state, optimistic read updates, and offline fallback.
 - **Tests & Retention**: Added 30-day read cleanup script, backend test suite (20 assertions passing), and mobile unit tests (44 passing).
+
+### **Nov 21, 2026 — Citizen Personal Reports & Tracking Screen**
+- **Dedicated Personal Endpoint**: Added `GET /api/v1/reports/mine` with route precedence, single-query lifetime counts, and zero reporter PII.
+- **Access Guard**: Restricted legacy `GET /reports?user_id=` with HTTP 403 for non-admins querying other users.
+- **Offline Queue Merging**: Created `myReportsProvider` merging SQLite pending submissions with server reports and auto-refreshing on sync.
+- **Local Cache & Fallback**: Added disk caching with offline warning banner and automatic 404 fallback for seamless rollouts.
+- **Tracking Screen**: Refactored `MyReportsScreen` with 4 metric filter chips, 4-step progress stepper, neutral closed state, and unread notification dots.
+- **Automated Tests**: Added backend test suite (`test:my-reports`, 16/16 passing) and Flutter unit/widget tests (14/14 passing).
+
